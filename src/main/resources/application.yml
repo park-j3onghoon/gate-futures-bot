@@ -1,0 +1,22 @@
+# Gate.io API 설정
+gate:
+  api:
+    key: ${GATE_API_KEY:}
+    secret: ${GATE_API_SECRET:}
+    host: https://api.gateio.ws/api/v4
+    settle: usdt
+
+# 봇 설정
+bot:
+  contracts:
+    - BTC_USDT
+  leverage: 5
+  order-size: 1
+  check-interval-sec: 60
+  take-profit-pct: 5.0
+  stop-loss-pct: 3.0
+
+# 로깅
+logging:
+  level:
+    com.parkj3onghoon.gatefuturesbot: INFO

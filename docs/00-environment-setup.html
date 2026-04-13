@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>00 - 환경 설정 | gate-futures-bot 학습 가이드</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>00 - 환경 설정</h1>
+      <p class="subtitle">JDK, Gradle Wrapper, Spring Initializr, 프로젝트 구조</p>
+    </header>
+
+    <!-- TOC -->
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#jdk">JDK란? JDK vs JRE 차이</a></li>
+        <li><a href="#jdk21">왜 JDK 21인가</a></li>
+        <li><a href="#install">brew install 명령어 해부</a></li>
+        <li><a href="#gradle-wrapper">Gradle Wrapper (gradlew) 개념</a></li>
+        <li><a href="#initializr">Spring Initializr란</a></li>
+        <li><a href="#first-build">첫 빌드 실행</a></li>
+        <li><a href="#project-structure">프로젝트 디렉토리 구조</a></li>
+      </ol>
+    </div>
+
+    <!-- 1. JDK란 -->
+    <h2 id="jdk"><span class="section-num">1</span> JDK란? JDK vs JRE 차이</h2>
+
+    <p>Python을 실행하려면 Python 인터프리터가 필요하듯, Kotlin/Java를 실행하려면 <strong>JDK</strong>가 필요합니다.</p>
+
+    <div class="mermaid">
+flowchart TB
+    subgraph JDK["JDK (Java Development Kit)"]
+        direction TB
+        COMPILER["javac / kotlinc<br/>컴파일러"]
+        TOOLS["개발 도구<br/>디버거, 프로파일러 등"]
+        subgraph JRE["JRE (Java Runtime Environment)"]
+            JVM["JVM<br/>Java Virtual Machine"]
+            LIBS["표준 라이브러리<br/>java.lang, java.util 등"]
+        end
+    end
+
+    style JDK fill:#e3f2fd,stroke:#2196f3,color:#000
+    style JRE fill:#bbdefb,stroke:#1976d2,color:#000
+    style COMPILER fill:#fff,stroke:#1976d2,color:#000
+    style TOOLS fill:#fff,stroke:#1976d2,color:#000
+    style JVM fill:#fff,stroke:#1565c0,color:#000
+    style LIBS fill:#fff,stroke:#1565c0,color:#000
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Python 세계</th>
+          <th>Java/Kotlin 세계</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>실행 환경</strong></td>
+          <td>Python 인터프리터</td>
+          <td>JRE (JVM + 표준 라이브러리)</td>
+        </tr>
+        <tr>
+          <td><strong>개발 환경</strong></td>
+          <td>Python + pip + venv</td>
+          <td>JDK (JRE + 컴파일러 + 개발 도구)</td>
+        </tr>
+        <tr>
+          <td><strong>코드 실행 방식</strong></td>
+          <td>소스 코드 직접 해석 (인터프리터)</td>
+          <td>컴파일 &rarr; 바이트코드 &rarr; JVM 실행</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <strong>JRE</strong> = "실행만" 가능 (서버에 배포할 때).<br>
+        <strong>JDK</strong> = "개발 + 실행" 가능 (개발할 때 필요). 우리는 JDK를 설치합니다.
+      </p>
+    </div>
+
+    <!-- 2. 왜 JDK 21 -->
+    <h2 id="jdk21"><span class="section-num">2</span> 왜 JDK 21인가 (최신이 있는데 왜?)</h2>
+
+    <p>Java는 6개월마다 새 버전이 나옵니다. 하지만 모든 버전이 같지 않습니다.</p>
+
+    <div class="mermaid">
+timeline
+    title JDK 버전과 LTS
+    section LTS 버전 (장기 지원)
+        JDK 8 (2014)  : 8년+ 지원
+        JDK 11 (2018) : 8년+ 지원
+        JDK 17 (2021) : 8년+ 지원
+        JDK 21 (2023) : 8년+ 지원, 우리가 사용
+    section 일반 버전 (단기 지원)
+        JDK 22 (2024) : 6개월 지원
+        JDK 23 (2024) : 6개월 지원
+        JDK 24 (2025) : 6개월 지원
+        JDK 25 (2025) : 6개월 지원
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>LTS 버전 (Long-Term Support)</th>
+          <th>일반 버전</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>지원 기간</strong></td>
+          <td>최소 8년</td>
+          <td>6개월 (다음 버전 나오면 끝)</td>
+        </tr>
+        <tr>
+          <td><strong>보안 패치</strong></td>
+          <td>오래 제공됨</td>
+          <td>6개월 후 없음</td>
+        </tr>
+        <tr>
+          <td><strong>프로덕션 사용</strong></td>
+          <td>적합</td>
+          <td>실험/테스트 용도</td>
+        </tr>
+        <tr>
+          <td><strong>라이브러리 호환성</strong></td>
+          <td>대부분 지원</td>
+          <td>일부 미지원 가능</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip</div>
+      <p>
+        Python으로 비유하면: Python 3.12(안정) vs Python 3.14(베타) 중 프로덕션에 뭘 쓸지의 문제입니다.
+        <strong>JDK 21은 가장 최신 LTS</strong>이므로, 안정성과 최신 기능을 모두 갖췄습니다.
+        Spring Boot 3.5도 JDK 21을 공식 지원합니다.
+      </p>
+    </div>
+
+    <!-- 3. brew install 해부 -->
+    <h2 id="install"><span class="section-num">3</span> <code>brew install</code> 명령어 의미 분해</h2>
+
+    <pre><code class="language-bash">brew install --cask temurin@21</code></pre>
+
+    <table>
+      <thead>
+        <tr>
+          <th>부분</th>
+          <th>의미</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>brew</code></td>
+          <td>macOS 패키지 매니저 (Homebrew)</td>
+        </tr>
+        <tr>
+          <td><code>install</code></td>
+          <td>패키지를 설치</td>
+        </tr>
+        <tr>
+          <td><code>--cask</code></td>
+          <td>GUI 앱이나 대형 바이너리를 설치하는 모드. JDK는 단순 CLI 도구가 아니라 시스템에 등록되는 런타임이라 cask 사용</td>
+        </tr>
+        <tr>
+          <td><code>temurin</code></td>
+          <td>Eclipse Adoptium이 배포하는 무료 오픈소스 JDK. Oracle JDK의 무료 대안</td>
+        </tr>
+        <tr>
+          <td><code>@21</code></td>
+          <td>JDK 21 버전 지정</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: JDK 배포판이 여러 개인 이유</div>
+      <p>
+        Python은 공식 배포판 하나지만, Java는 여러 회사가 배포합니다 (Oracle, Temurin, Amazon Corretto, Azul 등).
+        모두 같은 소스 코드(OpenJDK)를 빌드한 것이라 기능은 동일합니다.
+        <strong>Temurin</strong>은 커뮤니티가 무료로 배포하는 가장 대중적인 선택입니다.
+      </p>
+    </div>
+
+    <p>설치 후 확인:</p>
+    <pre><code class="language-bash"># Python 버전 확인하듯이
+java -version
+# 출력 예: openjdk version "21.0.x" ...
+
+# JAVA_HOME 확인 (Python의 sys.executable 같은 것)
+/usr/libexec/java_home -V</code></pre>
+
+    <!-- 4. Gradle Wrapper -->
+    <h2 id="gradle-wrapper"><span class="section-num">4</span> Gradle Wrapper (gradlew) 개념</h2>
+
+    <p>
+      Python 프로젝트에서 팀원마다 다른 pip 버전을 쓰면 문제가 생기듯,
+      Gradle도 버전 차이 문제가 있습니다. <strong>Gradle Wrapper</strong>는 이 문제를 해결합니다.
+    </p>
+
+    <div class="mermaid">
+flowchart LR
+    subgraph WITHOUT["Gradle Wrapper 없이"]
+        DEV1["개발자 A<br/>Gradle 8.10"]
+        DEV2["개발자 B<br/>Gradle 8.14"]
+        DEV3["CI 서버<br/>Gradle 8.12"]
+        PROBLEM["버전 불일치!<br/>빌드 실패 가능"]
+    end
+
+    subgraph WITH["Gradle Wrapper 사용"]
+        GRADLEW["gradlew 실행"]
+        CHECK{"지정된 Gradle<br/>8.14.4 있나?"}
+        DOWNLOAD["자동 다운로드"]
+        RUN["Gradle 8.14.4<br/>으로 빌드"]
+    end
+
+    DEV1 --> PROBLEM
+    DEV2 --> PROBLEM
+    DEV3 --> PROBLEM
+
+    GRADLEW --> CHECK
+    CHECK -->|"없으면"| DOWNLOAD
+    DOWNLOAD --> RUN
+    CHECK -->|"있으면"| RUN
+
+    style WITHOUT fill:#ffcdd2,stroke:#ef5350,color:#000
+    style WITH fill:#e8f5e9,stroke:#4caf50,color:#000
+    style PROBLEM fill:#ef5350,stroke:#c62828,color:#fff
+    style RUN fill:#4caf50,stroke:#2e7d32,color:#fff
+    </div>
+
+    <h3>Gradle Wrapper 파일들</h3>
+    <div class="dir-tree">
+gate-futures-bot/
+├── gradlew              <span class="comment">← Unix/Mac용 실행 스크립트 (bash)</span>
+├── gradlew.bat          <span class="comment">← Windows용 실행 스크립트</span>
+└── gradle/
+    └── wrapper/
+        ├── gradle-wrapper.jar         <span class="comment">← Gradle 다운로더 (작은 Java 프로그램)</span>
+        └── gradle-wrapper.properties  <span class="comment">← 사용할 Gradle 버전 지정</span>
+    </div>
+
+    <p><code>gradle-wrapper.properties</code> 내용:</p>
+    <pre><code class="language-bash"># 이 한 줄이 핵심! Gradle 8.14.4 버전을 사용하겠다는 선언
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.4-bin.zip</code></pre>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <strong>Gradle Wrapper = 프로젝트에 Gradle 버전을 고정</strong>하는 장치.<br>
+        <code>./gradlew</code>를 실행하면 지정된 버전의 Gradle을 자동 다운로드 &amp; 실행합니다.<br>
+        시스템에 Gradle을 따로 설치할 필요가 없습니다. Python의 <code>pipx</code>가 도구 버전을 격리하는 것과 비슷합니다.
+      </p>
+    </div>
+
+    <!-- 5. Spring Initializr -->
+    <h2 id="initializr"><span class="section-num">5</span> Spring Initializr란</h2>
+
+    <p>
+      Django에서 <code>django-admin startproject myproject</code>로 프로젝트를 생성하듯,
+      Spring Boot는 <a href="https://start.spring.io" target="_blank">Spring Initializr</a>라는 웹 도구로 프로젝트를 생성합니다.
+    </p>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python / Django</div>
+        <pre><code class="language-bash"># 프로젝트 생성
+django-admin startproject myproject
+
+# 구조:
+# myproject/
+#   manage.py
+#   myproject/
+#     settings.py
+#     urls.py
+#     wsgi.py</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin / Spring Boot</div>
+        <pre><code class="language-bash"># start.spring.io 에서 설정 선택 후 다운로드
+# 또는 CLI로:
+# curl https://start.spring.io/starter.zip \
+#   -d language=kotlin \
+#   -d type=gradle-project-kotlin \
+#   -o project.zip
+
+# 구조: (아래 섹션에서 자세히)</code></pre>
+      </div>
+    </div>
+
+    <h3>Spring Initializr에서 선택한 것들</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>설정 항목</th>
+          <th>선택한 값</th>
+          <th>의미</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Project</td>
+          <td>Gradle - Kotlin</td>
+          <td>빌드 도구와 빌드 스크립트 언어</td>
+        </tr>
+        <tr>
+          <td>Language</td>
+          <td>Kotlin</td>
+          <td>애플리케이션 개발 언어</td>
+        </tr>
+        <tr>
+          <td>Spring Boot</td>
+          <td>3.5.3</td>
+          <td>프레임워크 버전</td>
+        </tr>
+        <tr>
+          <td>Group</td>
+          <td>com.parkj3onghoon</td>
+          <td>패키지 네임스페이스 (Python의 패키지 구조와 유사)</td>
+        </tr>
+        <tr>
+          <td>Artifact</td>
+          <td>gate-futures-bot</td>
+          <td>프로젝트명</td>
+        </tr>
+        <tr>
+          <td>Java</td>
+          <td>21</td>
+          <td>타겟 JDK 버전</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: Group ID란</div>
+      <p>
+        <code>com.parkj3onghoon</code>처럼 도메인을 뒤집은 형태입니다.
+        Java/Kotlin 세계에서는 패키지 충돌을 방지하기 위해 이런 컨벤션을 사용합니다.
+        Python의 <code>pip install mypackage</code>와 달리, Java에서는 <code>group:artifact:version</code>으로 라이브러리를 식별합니다.
+      </p>
+    </div>
+
+    <!-- 6. 첫 빌드 -->
+    <h2 id="first-build"><span class="section-num">6</span> <code>./gradlew build</code> 첫 실행 &mdash; 무슨 일이 일어나는가</h2>
+
+    <pre><code class="language-bash">cd gate-futures-bot
+./gradlew build</code></pre>
+
+    <p>이 명령어를 처음 실행하면 꽤 오래 걸립니다. 내부에서 일어나는 일을 순서대로 보겠습니다:</p>
+
+    <div class="mermaid">
+flowchart TB
+    A["./gradlew build 실행"]
+    B["1. Gradle 8.14.4 다운로드<br/>(첫 실행 시만, ~100MB)"]
+    C["2. 의존성 다운로드<br/>(Maven Central에서, pip install과 비슷)"]
+    D["3. compileKotlin<br/>(Kotlin 소스 → JVM 바이트코드)"]
+    E["4. processResources<br/>(application.yml 등 리소스 복사)"]
+    F["5. test<br/>(JUnit 테스트 실행)"]
+    G["6. jar / bootJar<br/>(실행 가능한 JAR 파일 생성)"]
+    H["build/libs/gate-futures-bot-0.0.1-SNAPSHOT.jar<br/>✅ 빌드 완료!"]
+
+    A --> B --> C --> D --> E --> F --> G --> H
+
+    style A fill:#e3f2fd,stroke:#2196f3,color:#000
+    style B fill:#fff3e0,stroke:#ff9800,color:#000
+    style C fill:#fff3e0,stroke:#ff9800,color:#000
+    style D fill:#e8f5e9,stroke:#4caf50,color:#000
+    style E fill:#e8f5e9,stroke:#4caf50,color:#000
+    style F fill:#f3e5f5,stroke:#7c4dff,color:#000
+    style G fill:#e8f5e9,stroke:#4caf50,color:#000
+    style H fill:#4caf50,stroke:#2e7d32,color:#fff
+    </div>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python 세계에서 비슷한 과정</div>
+        <pre><code class="language-bash"># 의존성 설치
+pip install -r requirements.txt
+
+# 테스트 실행
+pytest
+
+# 패키징 (선택)
+python setup.py bdist_wheel
+
+# → 이 3개를 한 번에 하는 게
+#   ./gradlew build</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Gradle이 한 번에 하는 것</div>
+        <pre><code class="language-bash"># 이것 하나로 전부!
+./gradlew build
+
+# 결과:
+# build/
+#   classes/    ← 컴파일된 클래스 파일
+#   libs/       ← JAR 파일 (배포용)
+#   reports/    ← 테스트 리포트
+#   resources/  ← 복사된 리소스</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-warning">
+      <div class="box-title">주의: 첫 실행이 느린 이유</div>
+      <p>
+        첫 빌드 시 Gradle 자체와 모든 의존성을 인터넷에서 다운로드합니다.
+        <code>~/.gradle/caches/</code>에 캐시되므로 두 번째부터는 훨씬 빠릅니다.
+        Python에서 <code>pip install</code>이 처음에 오래 걸리는 것과 같습니다.
+      </p>
+    </div>
+
+    <!-- 7. 프로젝트 디렉토리 구조 -->
+    <h2 id="project-structure"><span class="section-num">7</span> 프로젝트 디렉토리 구조</h2>
+
+    <p>모든 파일/폴더가 무엇인지 하나씩 설명합니다:</p>
+
+    <div class="dir-tree">
+gate-futures-bot/
+│
+├── <strong>build.gradle.kts</strong>         <span class="comment">← 핵심! 빌드 설정 파일 (다음 가이드에서 상세 해부)</span>
+├── <strong>settings.gradle.kts</strong>      <span class="comment">← 프로젝트 이름 선언</span>
+├── <strong>gradle.properties</strong>        <span class="comment">← Gradle 전역 속성</span>
+│
+├── <strong>gradlew</strong>                  <span class="comment">← Gradle Wrapper 실행 파일 (Mac/Linux)</span>
+├── <strong>gradlew.bat</strong>              <span class="comment">← Gradle Wrapper 실행 파일 (Windows)</span>
+├── gradle/
+│   └── wrapper/
+│       ├── gradle-wrapper.jar        <span class="comment">← Wrapper가 Gradle을 다운로드하는 도구</span>
+│       └── gradle-wrapper.properties <span class="comment">← 사용할 Gradle 버전 지정</span>
+│
+├── <strong>src/</strong>                     <span class="comment">← 소스 코드 루트 (Python의 프로젝트 패키지 디렉토리)</span>
+│   ├── <strong>main/</strong>                <span class="comment">← 프로덕션 코드</span>
+│   │   ├── <strong>kotlin/</strong>          <span class="comment">← Kotlin 소스 파일 (.kt)</span>
+│   │   │   └── com/parkj3onghoon/gatefuturesbot/
+│   │   │       └── <strong>GateFuturesBotApplication.kt</strong>  <span class="comment">← 진입점 (manage.py 역할)</span>
+│   │   └── <strong>resources/</strong>       <span class="comment">← 설정/리소스 파일</span>
+│   │       └── <strong>application.yml</strong>  <span class="comment">← 앱 설정 (settings.py 역할)</span>
+│   └── <strong>test/</strong>                <span class="comment">← 테스트 코드</span>
+│       └── kotlin/
+│           └── com/parkj3onghoon/gatefuturesbot/
+│               └── <strong>GateFuturesBotApplicationTests.kt</strong>
+│
+├── <strong>build/</strong>                   <span class="comment">← 빌드 산출물 (자동 생성, .gitignore에 포함)</span>
+│   ├── classes/              <span class="comment">← 컴파일된 .class 파일 (.pyc와 유사)</span>
+│   ├── libs/                 <span class="comment">← 생성된 JAR 파일</span>
+│   └── reports/              <span class="comment">← 테스트/커버리지 리포트 (HTML)</span>
+│
+├── <strong>.gradle/</strong>                 <span class="comment">← Gradle 캐시 (자동 생성, .gitignore에 포함)</span>
+└── <strong>.kotlin/</strong>                 <span class="comment">← Kotlin 컴파일러 캐시 (자동 생성)</span>
+    </div>
+
+    <h3>Django 프로젝트와 비교</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Django</th>
+          <th>Spring Boot (이 프로젝트)</th>
+          <th>역할</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>manage.py</code></td>
+          <td><code>GateFuturesBotApplication.kt</code></td>
+          <td>애플리케이션 진입점</td>
+        </tr>
+        <tr>
+          <td><code>settings.py</code></td>
+          <td><code>application.yml</code></td>
+          <td>앱 설정</td>
+        </tr>
+        <tr>
+          <td><code>requirements.txt</code></td>
+          <td><code>build.gradle.kts</code>의 dependencies</td>
+          <td>의존성 선언</td>
+        </tr>
+        <tr>
+          <td><code>Makefile</code></td>
+          <td><code>build.gradle.kts</code>의 tasks</td>
+          <td>빌드/실행 자동화</td>
+        </tr>
+        <tr>
+          <td><code>pytest.ini</code></td>
+          <td><code>build.gradle.kts</code>의 test 설정</td>
+          <td>테스트 설정</td>
+        </tr>
+        <tr>
+          <td><code>venv/</code></td>
+          <td><code>~/.gradle/caches/</code></td>
+          <td>다운로드된 의존성 저장소</td>
+        </tr>
+        <tr>
+          <td><code>__pycache__/</code></td>
+          <td><code>build/classes/</code></td>
+          <td>컴파일된 바이트코드</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>진입점 파일 비교</h3>
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Django: manage.py</div>
+        <pre><code class="language-python">#!/usr/bin/env python
+"""Django management script."""
+import os
+import sys
+
+def main():
+    os.environ.setdefault(
+        'DJANGO_SETTINGS_MODULE',
+        'myproject.settings'
+    )
+    from django.core.management \
+        import execute_from_command_line
+    execute_from_command_line(sys.argv)
+
+if __name__ == '__main__':
+    main()</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Spring Boot: GateFuturesBotApplication.kt</div>
+        <pre><code class="language-kotlin">package com.parkj3onghoon
+    .gatefuturesbot
+
+import org.springframework.boot
+    .autoconfigure.SpringBootApplication
+import org.springframework.boot
+    .runApplication
+
+@SpringBootApplication
+class GateFuturesBotApplication
+
+fun main(args: Array&lt;String&gt;) {
+    runApplication
+        &lt;GateFuturesBotApplication&gt;(*args)
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li><strong>src/main/kotlin/</strong> = 프로덕션 코드가 들어가는 곳</li>
+        <li><strong>src/main/resources/</strong> = 설정 파일 (application.yml)</li>
+        <li><strong>src/test/kotlin/</strong> = 테스트 코드</li>
+        <li><strong>build.gradle.kts</strong> = 모든 빌드 설정의 중심</li>
+        <li><strong>gradlew</strong> = Gradle 실행 명령어 (시스템 설치 불필요)</li>
+        <li><strong>build/</strong> = 빌드 산출물 (자동 생성, 커밋하지 않음)</li>
+      </ul>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: 왜 패키지 경로가 이렇게 깊은가</div>
+      <p>
+        <code>src/main/kotlin/com/parkj3onghoon/gatefuturesbot/</code> — 이 깊은 경로는
+        Java/Kotlin 세계의 관례입니다. <strong>패키지명이 디렉토리 구조와 일치</strong>해야 합니다.
+        Python에서 <code>from mypackage.module import Class</code>를 쓸 때 실제 디렉토리 구조가
+        <code>mypackage/module.py</code>인 것과 같은 원리이지만, 도메인 역순 네이밍까지 적용됩니다.
+      </p>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="guide-nav">
+      <a href="index.html">&larr; 목차로 돌아가기</a>
+      <span class="spacer"></span>
+      <a href="01-kotlin-basics.html">다음: Kotlin 기초 &rarr;</a>
+    </nav>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+</body>
+</html>

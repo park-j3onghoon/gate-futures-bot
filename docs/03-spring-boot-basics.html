@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>03 - Spring Boot 기초 | gate-futures-bot 학습 가이드</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>03 - Spring Boot 기초</h1>
+      <p class="subtitle">Django 개발자를 위한 Spring Boot 핵심 개념</p>
+      <span class="badge badge-spring">Spring Boot 3.5</span>
+    </header>
+
+    <!-- TOC -->
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#what-is-spring">Spring Boot란</a></li>
+        <li><a href="#entry-point">@SpringBootApplication: 진입점</a></li>
+        <li><a href="#di">DI (의존성 주입)</a></li>
+        <li><a href="#config">application.yml: 설정</a></li>
+        <li><a href="#bean-lifecycle">Bean 라이프사이클</a></li>
+        <li><a href="#logging">로깅</a></li>
+        <li><a href="#testing">테스트</a></li>
+      </ol>
+    </div>
+
+    <!-- 1. Spring Boot란 -->
+    <h2 id="what-is-spring"><span class="section-num">1</span> Spring Boot란</h2>
+
+    <p>
+      <strong>Spring Boot = Django 같은 프레임워크</strong>이지만, 범위가 더 넓습니다.
+      Django가 주로 웹 애플리케이션에 특화되어 있다면,
+      Spring Boot는 웹, 배치, 메시징, 스케줄링 등 모든 종류의 애플리케이션을 만들 수 있습니다.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>관점</th>
+          <th>Django</th>
+          <th>Spring Boot</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>철학</strong></td>
+          <td>"Batteries included" (다 들어있음)</td>
+          <td>"Convention over Configuration" + "Starter"로 조합</td>
+        </tr>
+        <tr>
+          <td><strong>주요 용도</strong></td>
+          <td>웹 (REST API, 템플릿 렌더링)</td>
+          <td>웹, 배치, 메시징, CLI 등 범용</td>
+        </tr>
+        <tr>
+          <td><strong>ORM</strong></td>
+          <td>Django ORM (내장)</td>
+          <td>JPA / Hibernate (별도 Starter 추가)</td>
+        </tr>
+        <tr>
+          <td><strong>설정 파일</strong></td>
+          <td><code>settings.py</code></td>
+          <td><code>application.yml</code></td>
+        </tr>
+        <tr>
+          <td><strong>의존성 주입</strong></td>
+          <td>없음 (직접 import)</td>
+          <td>핵심 기능 (IoC 컨테이너)</td>
+        </tr>
+        <tr>
+          <td><strong>프로젝트 구조</strong></td>
+          <td>app 단위 분리 (urls.py, views.py)</td>
+          <td>패키지 단위 자유 구성</td>
+        </tr>
+        <tr>
+          <td><strong>이 프로젝트에서</strong></td>
+          <td>-</td>
+          <td>웹 서버 없이 봇으로 사용 (CLI 앱)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: 왜 웹 서버가 없는데 Spring Boot를 쓰나</div>
+      <p>
+        이 프로젝트(<code>gate-futures-bot</code>)는 HTTP 요청을 받는 웹 서버가 아닙니다.
+        그런데도 Spring Boot를 쓰는 이유:
+        <strong>DI(의존성 주입), 설정 관리, 로깅, 테스트 지원</strong> 등의 인프라가 매우 편리하기 때문입니다.
+        Django도 <code>manage.py</code>로 커맨드를 만들어 웹 서버 없이 쓸 수 있는 것과 비슷합니다.
+      </p>
+    </div>
+
+    <!-- 2. @SpringBootApplication -->
+    <h2 id="entry-point"><span class="section-num">2</span> @SpringBootApplication: 진입점</h2>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Django</div>
+        <pre><code class="language-python"># manage.py
+import os
+import sys
+
+def main():
+    os.environ.setdefault(
+        'DJANGO_SETTINGS_MODULE',
+        'myproject.settings'
+    )
+    from django.core.management \
+        import execute_from_command_line
+    execute_from_command_line(sys.argv)
+
+# 1. settings.py를 읽어서 설정 로드
+# 2. 등록된 앱들을 로드
+# 3. 커맨드 실행</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Spring Boot</div>
+        <pre><code class="language-kotlin">@SpringBootApplication
+class GateFuturesBotApplication
+
+fun main(args: Array&lt;String&gt;) {
+    runApplication
+        &lt;GateFuturesBotApplication&gt;(*args)
+}
+
+// @SpringBootApplication은 3가지를 합친 것:
+// 1. @Configuration - 설정 클래스
+// 2. @EnableAutoConfiguration - 자동 설정
+// 3. @ComponentScan - 컴포넌트 자동 탐색</code></pre>
+      </div>
+    </div>
+
+    <div class="mermaid">
+flowchart TB
+    MAIN["main() 실행"]
+    SPRING["Spring 컨테이너 생성"]
+    CONFIG["application.yml 읽기<br/>(= settings.py 로드)"]
+    SCAN["@ComponentScan<br/>패키지 내 모든 컴포넌트 탐색<br/>(= INSTALLED_APPS 로드)"]
+    AUTO["@EnableAutoConfiguration<br/>필요한 설정 자동 적용"]
+    BEAN["Bean(객체) 생성 & 주입<br/>(= 의존성 연결)"]
+    READY["애플리케이션 준비 완료!"]
+
+    MAIN --> SPRING
+    SPRING --> CONFIG
+    SPRING --> SCAN
+    SPRING --> AUTO
+    CONFIG --> BEAN
+    SCAN --> BEAN
+    AUTO --> BEAN
+    BEAN --> READY
+
+    style MAIN fill:#e3f2fd,stroke:#2196f3,color:#000
+    style SPRING fill:#e8f5e9,stroke:#4caf50,color:#000
+    style READY fill:#4caf50,stroke:#2e7d32,color:#fff
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <code>@SpringBootApplication</code> = "이 클래스가 Spring Boot 앱의 시작점"이라는 선언.<br>
+        Django의 <code>settings.py</code> 로드 + <code>INSTALLED_APPS</code> 탐색 + <code>manage.py</code> 실행을
+        한 번에 하는 어노테이션입니다.
+      </p>
+    </div>
+
+    <!-- 3. DI (의존성 주입) -->
+    <h2 id="di"><span class="section-num">3</span> DI (의존성 주입) &mdash; Spring의 핵심 개념</h2>
+
+    <p>
+      <strong>Django에는 없는 개념</strong>이지만, Spring에서 가장 중요한 개념입니다.
+      먼저 "왜 필요한지"를 Django 코드로 설명합니다.
+    </p>
+
+    <h3>DI가 없는 Django 방식</h3>
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Django: 직접 import해서 사용</div>
+        <pre><code class="language-python"># services/order_service.py
+from gateio_sdk import GateClient
+
+class OrderService:
+    def __init__(self):
+        # 직접 생성! 테스트할 때 곤란...
+        self.client = GateClient(
+            api_key="real_key",
+            api_secret="real_secret"
+        )
+
+    def place_order(self, symbol, size):
+        return self.client.create_order(
+            symbol=symbol, size=size
+        )
+
+# 사용하는 쪽
+from services.order_service import OrderService
+service = OrderService()  # 직접 생성
+service.place_order("BTC_USDT", 1)</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Spring Boot: 주입받아서 사용</div>
+        <pre><code class="language-kotlin">// Spring이 객체를 만들어서 주입!
+@Service
+class OrderService(
+    private val client: GateClient  // 주입!
+) {
+    fun placeOrder(symbol: String, size: Int) {
+        client.createOrder(
+            symbol = symbol, size = size
+        )
+    }
+}
+
+// 사용하는 쪽도 주입받음
+@Component
+class TradingBot(
+    private val orderService: OrderService
+) {
+    fun execute() {
+        orderService.placeOrder("BTC_USDT", 1)
+    }
+}</code></pre>
+      </div>
+    </div>
+
+    <h3>왜 DI가 필요한가: 테스트 문제</h3>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">DI 없이: 테스트가 어려움</div>
+        <pre><code class="language-python"># 테스트에서 진짜 API를 호출해야 함!
+# mock을 끼워넣으려면 monkeypatch 등 트릭 필요
+
+from unittest.mock import patch
+
+class TestOrderService:
+    @patch('services.order_service.GateClient')
+    def test_place_order(self, mock_client):
+        # GateClient를 패치해야 함
+        # 내부 구현을 알아야 패치 가능...
+        service = OrderService()
+        service.place_order("BTC", 1)</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">DI 있을 때: 테스트가 쉬움</div>
+        <pre><code class="language-kotlin">// 가짜 client를 직접 넣어줄 수 있음!
+class OrderServiceTest {
+    @Test
+    fun `주문 생성 테스트`() {
+        val fakeClient = mockk&lt;GateClient&gt;()
+        every {
+            fakeClient.createOrder(any(), any())
+        } returns Order(...)
+
+        // 가짜를 주입!
+        val service = OrderService(fakeClient)
+        service.placeOrder("BTC_USDT", 1)
+
+        verify { fakeClient.createOrder("BTC_USDT", 1) }
+    }
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="mermaid">
+flowchart TB
+    subgraph WITHOUT["DI 없이 (Django 방식)"]
+        direction TB
+        BOT1["TradingBot"]
+        OS1["OrderService"]
+        GC1["GateClient<br/>(직접 생성)"]
+        BOT1 -->|"직접 생성"| OS1
+        OS1 -->|"직접 생성"| GC1
+    end
+
+    subgraph WITH["DI 있을 때 (Spring 방식)"]
+        direction TB
+        SPRING["Spring 컨테이너<br/>(객체 공장)"]
+        BOT2["TradingBot"]
+        OS2["OrderService"]
+        GC2["GateClient"]
+        SPRING -->|"생성 & 주입"| BOT2
+        SPRING -->|"생성 & 주입"| OS2
+        SPRING -->|"생성 & 주입"| GC2
+        BOT2 -.->|"사용"| OS2
+        OS2 -.->|"사용"| GC2
+    end
+
+    style WITHOUT fill:#ffcdd2,stroke:#ef5350,color:#000
+    style WITH fill:#e8f5e9,stroke:#4caf50,color:#000
+    style SPRING fill:#4caf50,stroke:#2e7d32,color:#fff
+    </div>
+
+    <h3>Spring의 DI 어노테이션</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>어노테이션</th>
+          <th>의미</th>
+          <th>Django 비유</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>@Component</code></td>
+          <td>"이 클래스를 Spring이 관리해라" (일반)</td>
+          <td>없음 (모든 클래스를 직접 관리)</td>
+        </tr>
+        <tr>
+          <td><code>@Service</code></td>
+          <td>"이 클래스는 비즈니스 로직 담당" (@Component의 특화)</td>
+          <td>서비스 계층 클래스</td>
+        </tr>
+        <tr>
+          <td><code>@Configuration</code></td>
+          <td>"이 클래스는 설정/Bean 정의를 담당"</td>
+          <td><code>settings.py</code></td>
+        </tr>
+        <tr>
+          <td><code>@Bean</code></td>
+          <td>"이 메서드의 반환값을 Spring이 관리하는 객체로 등록"</td>
+          <td>없음</td>
+        </tr>
+        <tr>
+          <td><code>@Autowired</code></td>
+          <td>"이 필드/매개변수에 알맞은 객체를 주입해라"</td>
+          <td>없음</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>생성자 주입 (Kotlin 스타일)</h3>
+
+    <p>Kotlin에서는 생성자 주입이 가장 깔끔하고 권장되는 방식입니다.</p>
+
+    <pre><code class="language-kotlin">// Kotlin에서는 생성자 매개변수 = 자동 주입!
+// @Autowired 어노테이션도 필요 없음!
+
+@Service
+class OrderService(
+    private val gateClient: GateClient,    // 자동 주입
+    private val config: BotConfig          // 자동 주입
+) {
+    fun placeOrder(symbol: String) {
+        gateClient.createOrder(
+            symbol = symbol,
+            size = config.orderSize,
+            leverage = config.leverage
+        )
+    }
+}
+
+// Spring이 하는 일:
+// 1. GateClient 객체를 찾거나 생성
+// 2. BotConfig 객체를 찾거나 생성
+// 3. OrderService(gateClient, botConfig) 호출
+// 4. 생성된 OrderService를 다른 곳에서도 사용할 수 있게 보관</code></pre>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <strong>DI = "내가 필요한 객체를 직접 만들지 않고, Spring에게 달라고 요청"</strong><br>
+        장점: 테스트 시 가짜 객체를 쉽게 주입, 객체 간 결합도 낮춤, 라이프사이클 자동 관리<br>
+        Kotlin에서는 <strong>생성자 매개변수에 쓰기만 하면 자동 주입</strong>됩니다. 매우 간결합니다.
+      </p>
+    </div>
+
+    <!-- 4. application.yml -->
+    <h2 id="config"><span class="section-num">4</span> application.yml: 설정</h2>
+
+    <h3>Django의 settings.py vs Spring의 application.yml</h3>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Django: settings.py (Python 코드)</div>
+        <pre><code class="language-python"># settings.py
+import os
+
+GATE_API_KEY = os.environ.get('GATE_API_KEY', '')
+GATE_API_SECRET = os.environ.get('GATE_API_SECRET', '')
+GATE_API_HOST = 'https://api.gateio.ws/api/v4'
+GATE_SETTLE = 'usdt'
+
+BOT_CONTRACTS = ['BTC_USDT']
+BOT_LEVERAGE = 5
+BOT_ORDER_SIZE = 1
+BOT_CHECK_INTERVAL = 60
+BOT_TAKE_PROFIT_PCT = 5.0
+BOT_STOP_LOSS_PCT = 3.0
+
+# 로깅
+LOGGING = {
+    'version': 1,
+    'loggers': {
+        'myapp': {'level': 'INFO'},
+    },
+}</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Spring Boot: application.yml (YAML)</div>
+        <pre><code class="language-yaml">gate:
+  api:
+    key: ${GATE_API_KEY:}
+    secret: ${GATE_API_SECRET:}
+    host: https://api.gateio.ws/api/v4
+    settle: usdt
+
+bot:
+  contracts:
+    - BTC_USDT
+  leverage: 5
+  order-size: 1
+  check-interval-sec: 60
+  take-profit-pct: 5.0
+  stop-loss-pct: 3.0
+
+logging:
+  level:
+    com.parkj3onghoon.gatefuturesbot: INFO</code></pre>
+      </div>
+    </div>
+
+    <h3>YAML 문법 기초</h3>
+
+    <pre><code class="language-yaml"># 계층 구조는 들여쓰기로 (Python처럼!)
+gate:
+  api:
+    key: my-key       # gate.api.key = "my-key"
+
+# 리스트는 -로
+bot:
+  contracts:
+    - BTC_USDT        # bot.contracts[0] = "BTC_USDT"
+    - ETH_USDT        # bot.contracts[1] = "ETH_USDT"
+
+# 환경변수 참조
+gate:
+  api:
+    key: ${GATE_API_KEY:}           # 환경변수, 없으면 빈 문자열
+    secret: ${GATE_API_SECRET:}     # ${변수명:기본값} 형식
+    host: ${API_HOST:https://api.gateio.ws/api/v4}  # 없으면 기본값 사용</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: <code>${GATE_API_KEY:}</code>에서 콜론 뒤가 비어있는 이유</div>
+      <p>
+        <code>${변수명:기본값}</code> 형식에서 <code>:</code> 뒤가 비어있으면 기본값이 빈 문자열입니다.
+        Python의 <code>os.environ.get('GATE_API_KEY', '')</code>와 동일합니다.
+        환경변수가 설정되지 않았을 때 앱이 크래시하지 않고 빈 값으로 시작합니다.
+      </p>
+    </div>
+
+    <h3>@ConfigurationProperties: 타입 안전한 설정 바인딩</h3>
+
+    <p>
+      Django에서는 <code>settings.GATE_API_KEY</code>처럼 문자열 키로 접근합니다.
+      Spring Boot에서는 <strong>설정을 Kotlin 클래스에 자동 매핑</strong>할 수 있습니다.
+    </p>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Django: 문자열 키로 접근</div>
+        <pre><code class="language-python"># settings.py 직접 import
+from django.conf import settings
+
+# 오타 나도 런타임까지 모름!
+key = settings.GATE_API_KEY
+# settings.GATE_API_KEI  ← 오타! 런타임 에러
+
+# 타입 검증 없음
+leverage = settings.BOT_LEVERAGE
+# leverage가 int인지 str인지 보장 안 됨</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Spring Boot: 클래스에 자동 매핑</div>
+        <pre><code class="language-kotlin">@ConfigurationProperties(prefix = "bot")
+data class BotConfig(
+    val contracts: List&lt;String&gt;,
+    val leverage: Int,
+    val orderSize: Int,           // order-size → orderSize 자동 변환!
+    val checkIntervalSec: Long,
+    val takeProfitPct: Double,
+    val stopLossPct: Double
+)
+
+// 사용: 타입 안전!
+@Service
+class TradingBot(
+    private val config: BotConfig  // 주입!
+) {
+    fun run() {
+        // config.leverage는 항상 Int
+        // config.contracts는 항상 List&lt;String&gt;
+        // 오타 → 컴파일 에러!
+    }
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <code>@ConfigurationProperties</code> = YAML 설정을 Kotlin <code>data class</code>에 자동 바인딩.<br>
+        <strong>kebab-case(<code>order-size</code>) &rarr; camelCase(<code>orderSize</code>) 자동 변환.</strong><br>
+        오타 &rarr; 컴파일 에러. 타입 불일치 &rarr; 시작 시 에러. Django의 <code>settings.XXX</code>보다 훨씬 안전합니다.
+      </p>
+    </div>
+
+    <h3>Profile: 환경별 설정 분리</h3>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Django: DJANGO_SETTINGS_MODULE</div>
+        <pre><code class="language-python"># settings/base.py
+DEBUG = False
+
+# settings/dev.py
+from .base import *
+DEBUG = True
+DATABASES = { ... }
+
+# settings/prod.py
+from .base import *
+DEBUG = False
+DATABASES = { ... }
+
+# 실행 시:
+# DJANGO_SETTINGS_MODULE=settings.dev
+# python manage.py runserver</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Spring Boot: Profile</div>
+        <pre><code class="language-yaml"># application.yml (공통)
+bot:
+  leverage: 5
+
+# application-dev.yml (개발용)
+gate:
+  api:
+    host: https://sandbox.gateio.ws
+
+# application-prod.yml (프로덕션)
+gate:
+  api:
+    host: https://api.gateio.ws
+
+# 실행 시:
+# SPRING_PROFILES_ACTIVE=dev
+# ./gradlew bootRun</code></pre>
+      </div>
+    </div>
+
+    <!-- 5. Bean 라이프사이클 -->
+    <h2 id="bean-lifecycle"><span class="section-num">5</span> Bean 라이프사이클</h2>
+
+    <p>
+      <strong>Bean</strong> = Spring이 생성하고 관리하는 객체.
+      <code>@Component</code>, <code>@Service</code>, <code>@Bean</code> 등으로 등록된 클래스의 인스턴스입니다.
+    </p>
+
+    <div class="mermaid">
+flowchart TB
+    A["Spring 컨테이너 시작"]
+    B["@ComponentScan으로<br/>Bean 후보 탐색"]
+    C["Bean 인스턴스 생성<br/>(생성자 호출)"]
+    D["의존성 주입<br/>(생성자 매개변수에 다른 Bean 주입)"]
+    E["초기화 콜백<br/>(@PostConstruct)"]
+    F["Bean 사용 가능!<br/>(애플리케이션 실행)"]
+    G["애플리케이션 종료"]
+    H["소멸 콜백<br/>(@PreDestroy)"]
+    I["Bean 인스턴스 제거"]
+
+    A --> B --> C --> D --> E --> F
+    F --> G --> H --> I
+
+    style A fill:#e3f2fd,stroke:#2196f3,color:#000
+    style F fill:#4caf50,stroke:#2e7d32,color:#fff
+    style G fill:#fff3e0,stroke:#ff9800,color:#000
+    style I fill:#ffcdd2,stroke:#ef5350,color:#000
+    </div>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Django: 직접 관리</div>
+        <pre><code class="language-python"># 객체 생성/소멸을 직접 관리
+client = GateClient()
+
+# 초기화
+client.connect()
+
+# 사용
+client.place_order(...)
+
+# 정리 (보통 안 함, GC에 맡김)
+client.close()</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Spring Boot: 자동 관리</div>
+        <pre><code class="language-kotlin">@Service
+class GateApiClient(
+    private val config: GateConfig
+) {
+    // 생성 후 자동 호출
+    @PostConstruct
+    fun init() {
+        println("API 클라이언트 초기화!")
+    }
+
+    fun placeOrder(symbol: String) { ... }
+
+    // 종료 시 자동 호출
+    @PreDestroy
+    fun cleanup() {
+        println("연결 정리!")
+    }
+}
+// Spring이 생성 → init() → 사용 → cleanup() → 제거
+// 모두 자동!</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: 왜 Spring이 객체 생명주기를 관리하나</div>
+      <p>
+        <strong>싱글톤 보장</strong>: Bean은 기본적으로 하나만 생성됩니다.
+        여러 곳에서 <code>OrderService</code>를 주입받아도 같은 인스턴스입니다.
+        Python에서 전역 변수나 모듈 패턴으로 싱글톤을 만드는 것을 프레임워크가 자동으로 합니다.
+        <br><br>
+        <strong>정리 보장</strong>: DB 연결, API 세션 등 리소스를 <code>@PreDestroy</code>로 확실히 정리합니다.
+        Python의 <code>atexit</code> 모듈이나 context manager(<code>with</code>)와 비슷하지만 더 체계적입니다.
+      </p>
+    </div>
+
+    <!-- 6. 로깅 -->
+    <h2 id="logging"><span class="section-num">6</span> 로깅</h2>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Django / Python</div>
+        <pre><code class="language-python">import logging
+
+logger = logging.getLogger(__name__)
+
+class OrderService:
+    def place_order(self, symbol, size):
+        logger.info(f"주문: {symbol} x {size}")
+        try:
+            result = self.client.create_order(...)
+            logger.info(f"성공: {result.id}")
+            return result
+        except Exception as e:
+            logger.error(f"실패: {e}", exc_info=True)
+            raise</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Spring Boot / Kotlin</div>
+        <pre><code class="language-kotlin">import org.slf4j.LoggerFactory
+
+@Service
+class OrderService(
+    private val client: GateClient
+) {
+    private val log = LoggerFactory
+        .getLogger(javaClass)
+
+    fun placeOrder(symbol: String, size: Int) {
+        log.info("주문: {} x {}", symbol, size)
+        try {
+            val result = client.createOrder(...)
+            log.info("성공: {}", result.id)
+        } catch (e: Exception) {
+            log.error("실패: {}", e.message, e)
+            throw e
+        }
+    }
+}</code></pre>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Python logging</th>
+          <th>SLF4J + Logback</th>
+          <th>비고</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>logging.getLogger(__name__)</code></td>
+          <td><code>LoggerFactory.getLogger(javaClass)</code></td>
+          <td>로거 생성</td>
+        </tr>
+        <tr>
+          <td><code>logger.debug()</code></td>
+          <td><code>log.debug()</code></td>
+          <td>디버그 레벨</td>
+        </tr>
+        <tr>
+          <td><code>logger.info()</code></td>
+          <td><code>log.info()</code></td>
+          <td>정보 레벨</td>
+        </tr>
+        <tr>
+          <td><code>logger.warning()</code></td>
+          <td><code>log.warn()</code></td>
+          <td>경고 레벨</td>
+        </tr>
+        <tr>
+          <td><code>logger.error()</code></td>
+          <td><code>log.error()</code></td>
+          <td>에러 레벨</td>
+        </tr>
+        <tr>
+          <td><code>f"값: {value}"</code></td>
+          <td><code>"값: {}", value</code></td>
+          <td>플레이스홀더 방식 차이</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: <code>{}</code> 플레이스홀더 vs f-string</div>
+      <p>
+        Python은 f-string으로 문자열을 먼저 만들지만,
+        SLF4J는 <code>"주문: {} x {}", symbol, size</code>처럼 <strong>로그 레벨이 비활성화되면 문자열을 아예 만들지 않습니다</strong>.
+        DEBUG 로그가 수천 개 있어도 INFO 레벨에서는 성능 저하가 없습니다.
+      </p>
+    </div>
+
+    <h3>application.yml에서 로그 레벨 설정</h3>
+
+    <pre><code class="language-yaml"># application.yml
+logging:
+  level:
+    # 패키지별 로그 레벨 설정
+    com.parkj3onghoon.gatefuturesbot: INFO   # 우리 앱: INFO 이상
+    org.springframework: WARN                 # Spring 내부: WARN 이상
+    root: INFO                                # 기본: INFO</code></pre>
+
+    <!-- 7. 테스트 -->
+    <h2 id="testing"><span class="section-num">7</span> 테스트</h2>
+
+    <h3>JUnit 5 vs Django TestCase</h3>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Django / pytest</div>
+        <pre><code class="language-python">import pytest
+from unittest.mock import MagicMock
+
+class TestOrderService:
+    def test_place_order_success(self):
+        """주문 성공 테스트"""
+        # Mock 생성
+        mock_client = MagicMock()
+        mock_client.create_order.return_value = {
+            "id": "123", "status": "open"
+        }
+
+        service = OrderService(mock_client)
+        result = service.place_order("BTC_USDT", 1)
+
+        assert result["id"] == "123"
+        mock_client.create_order.assert_called_once()
+
+    def test_place_order_failure(self):
+        """주문 실패 시 예외 발생"""
+        mock_client = MagicMock()
+        mock_client.create_order.side_effect = \
+            ApiException("잔액 부족")
+
+        service = OrderService(mock_client)
+        with pytest.raises(ApiException):
+            service.place_order("BTC_USDT", 1)</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">JUnit 5 + MockK</div>
+        <pre><code class="language-kotlin">import io.mockk.*
+import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+
+class OrderServiceTest {
+    @Test
+    fun `주문 성공 테스트`() {  // 백틱으로 한글 메서드명!
+        // Mock 생성
+        val mockClient = mockk&lt;GateClient&gt;()
+        every {
+            mockClient.createOrder(any(), any())
+        } returns Order(id = "123", status = "open")
+
+        val service = OrderService(mockClient)
+        val result = service.placeOrder("BTC_USDT", 1)
+
+        assertEquals("123", result.id)
+        verify { mockClient.createOrder(any(), any()) }
+    }
+
+    @Test
+    fun `주문 실패 시 예외 발생`() {
+        val mockClient = mockk&lt;GateClient&gt;()
+        every {
+            mockClient.createOrder(any(), any())
+        } throws ApiException("잔액 부족")
+
+        val service = OrderService(mockClient)
+        assertFailsWith&lt;ApiException&gt; {
+            service.placeOrder("BTC_USDT", 1)
+        }
+    }
+}</code></pre>
+      </div>
+    </div>
+
+    <h3>테스트 도구 대응표</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Python</th>
+          <th>Kotlin / Spring</th>
+          <th>역할</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>pytest</code></td>
+          <td>JUnit 5 (<code>@Test</code>)</td>
+          <td>테스트 프레임워크</td>
+        </tr>
+        <tr>
+          <td><code>assert x == y</code></td>
+          <td><code>assertEquals(y, x)</code></td>
+          <td>값 비교 단언</td>
+        </tr>
+        <tr>
+          <td><code>pytest.raises()</code></td>
+          <td><code>assertFailsWith&lt;E&gt; { }</code></td>
+          <td>예외 발생 단언</td>
+        </tr>
+        <tr>
+          <td><code>unittest.mock.MagicMock</code></td>
+          <td><code>mockk&lt;T&gt;()</code></td>
+          <td>Mock 객체 생성</td>
+        </tr>
+        <tr>
+          <td><code>mock.return_value = x</code></td>
+          <td><code>every { ... } returns x</code></td>
+          <td>Mock 반환값 설정</td>
+        </tr>
+        <tr>
+          <td><code>mock.side_effect = err</code></td>
+          <td><code>every { ... } throws err</code></td>
+          <td>Mock 예외 설정</td>
+        </tr>
+        <tr>
+          <td><code>mock.assert_called_once()</code></td>
+          <td><code>verify { ... }</code></td>
+          <td>호출 검증</td>
+        </tr>
+        <tr>
+          <td><code>@pytest.fixture</code></td>
+          <td><code>@BeforeEach</code></td>
+          <td>테스트 전 설정</td>
+        </tr>
+        <tr>
+          <td><code>TestCase</code> (Django)</td>
+          <td><code>@SpringBootTest</code></td>
+          <td>통합 테스트 (전체 앱 로딩)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>@SpringBootTest: 통합 테스트</h3>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Django: TestCase</div>
+        <pre><code class="language-python">from django.test import TestCase
+
+class IntegrationTest(TestCase):
+    """Django가 DB, 설정 등을 자동 로드"""
+
+    def test_full_flow(self):
+        # Django 설정이 로드된 상태에서 테스트
+        # DB 트랜잭션 자동 롤백
+        pass</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Spring Boot: @SpringBootTest</div>
+        <pre><code class="language-kotlin">@SpringBootTest
+class IntegrationTest {
+    // Spring이 모든 Bean을 로드한 상태에서 테스트
+
+    @Autowired
+    lateinit var orderService: OrderService
+
+    @Test
+    fun `전체 흐름 테스트`() {
+        // 실제 Bean이 주입된 상태에서 테스트
+    }
+}</code></pre>
+      </div>
+    </div>
+
+    <h3>테스트 실행</h3>
+
+    <pre><code class="language-bash"># 전체 테스트 실행
+./gradlew test
+
+# 특정 테스트 클래스만
+./gradlew test --tests "com.parkj3onghoon.gatefuturesbot.OrderServiceTest"
+
+# 특정 테스트 메서드만
+./gradlew test --tests "*.OrderServiceTest.주문 성공*"
+
+# 테스트 결과 리포트 보기
+open build/reports/tests/test/index.html
+
+# 커버리지 리포트
+./gradlew jacocoTestReport
+open build/reports/jacoco/test/html/index.html</code></pre>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li><strong>단위 테스트</strong>: <code>@Test</code> + <code>mockk&lt;T&gt;()</code> &mdash; DI 덕분에 Mock 주입이 자연스러움</li>
+        <li><strong>통합 테스트</strong>: <code>@SpringBootTest</code> &mdash; 전체 Spring 컨테이너를 로드</li>
+        <li><strong>실행</strong>: <code>./gradlew test</code></li>
+        <li><strong>커버리지</strong>: <code>./gradlew jacocoTestReport</code></li>
+        <li>Kotlin의 백틱(`` ` ``)을 쓰면 <strong>테스트 메서드명을 한글로 작성 가능</strong></li>
+      </ul>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: 테스트 구조 권장 사항</div>
+      <p>
+        테스트 파일은 <code>src/test/kotlin/</code> 아래에 동일한 패키지 구조로 배치합니다.<br>
+        <code>src/main/.../OrderService.kt</code> &rarr; <code>src/test/.../OrderServiceTest.kt</code><br>
+        Django에서 <code>app/tests/test_services.py</code>를 만드는 것과 같은 패턴입니다.
+      </p>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="guide-nav">
+      <a href="02-gradle-basics.html">&larr; 이전: Gradle 이해하기</a>
+      <span class="spacer"></span>
+      <a href="index.html">목차로 돌아가기 &rarr;</a>
+    </nav>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>01 - Kotlin 기초 | gate-futures-bot 학습 가이드</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>01 - Kotlin 기초</h1>
+      <p class="subtitle">Python과 나란히 비교하며 배우는 Kotlin 핵심 문법</p>
+      <span class="badge badge-kotlin">Kotlin 2.1</span>
+    </header>
+
+    <!-- TOC -->
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#variables">변수: val / var</a></li>
+        <li><a href="#types">타입 시스템: 정적 타입 vs 동적 타입</a></li>
+        <li><a href="#null-safety">Null Safety</a></li>
+        <li><a href="#functions">함수</a></li>
+        <li><a href="#data-class">data class vs @dataclass</a></li>
+        <li><a href="#when">when 표현식</a></li>
+        <li><a href="#sealed-class">sealed class</a></li>
+        <li><a href="#collections">컬렉션</a></li>
+        <li><a href="#extension">확장 함수</a></li>
+        <li><a href="#lambda">람다 / 고차 함수</a></li>
+        <li><a href="#companion">companion object</a></li>
+        <li><a href="#coroutines">코루틴 기초</a></li>
+      </ol>
+    </div>
+
+    <!-- 1. 변수 -->
+    <h2 id="variables"><span class="section-num">1</span> 변수: val / var</h2>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python</div>
+        <pre><code class="language-python"># Python: 모든 변수는 재할당 가능
+name = "Bitcoin"
+name = "Ethereum"   # OK
+
+price = 50000
+price = 60000       # OK
+
+# "상수"는 관례적으로 대문자
+MAX_LEVERAGE = 100  # 바꿀 수 있지만 안 바꾸기로 약속</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin</div>
+        <pre><code class="language-kotlin">// val = 재할당 불가 (읽기 전용)
+val name = "Bitcoin"
+// name = "Ethereum"  // 컴파일 에러!
+
+// var = 재할당 가능
+var price = 50000
+price = 60000        // OK
+
+// 상수 (컴파일 타임 상수)
+const val MAX_LEVERAGE = 100</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <code>val</code> = 한 번 할당하면 끝 (Python에서 "이 변수 바꾸지 마세요"를 <strong>컴파일러가 강제</strong>).<br>
+        <code>var</code> = Python의 일반 변수처럼 재할당 가능.<br>
+        <strong>기본적으로 <code>val</code>을 쓰고, 꼭 바꿔야 할 때만 <code>var</code></strong>를 씁니다.
+      </p>
+    </div>
+
+    <!-- 2. 타입 -->
+    <h2 id="types"><span class="section-num">2</span> 타입 시스템: 정적 타입 vs 동적 타입</h2>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python (동적 타입)</div>
+        <pre><code class="language-python"># 타입을 안 써도 됨
+price = 50000
+name = "BTC"
+
+# 실행 시점에 타입 에러 발견
+price = "오만원"  # OK... 실행은 됨
+result = price + 100  # TypeError! (런타임)
+
+# 타입 힌트 (선택사항, 강제 아님)
+price: int = 50000
+name: str = "BTC"</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin (정적 타입 + 타입 추론)</div>
+        <pre><code class="language-kotlin">// 타입 추론: 컴파일러가 알아서 파악
+val price = 50000    // Int로 추론
+val name = "BTC"     // String으로 추론
+
+// 타입 불일치 → 컴파일 에러!
+// price = "오만원"  // 에러: String ← Int
+
+// 명시적 타입 선언도 가능
+val price2: Int = 50000
+val name2: String = "BTC"
+val ratio: Double = 0.05</code></pre>
+      </div>
+    </div>
+
+    <h3>주요 타입 대응표</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Python</th>
+          <th>Kotlin</th>
+          <th>비고</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>int</code></td><td><code>Int</code>, <code>Long</code></td><td>Int=32비트, Long=64비트</td></tr>
+        <tr><td><code>float</code></td><td><code>Double</code>, <code>Float</code></td><td>Double이 기본 (64비트)</td></tr>
+        <tr><td><code>str</code></td><td><code>String</code></td><td></td></tr>
+        <tr><td><code>bool</code></td><td><code>Boolean</code></td><td></td></tr>
+        <tr><td><code>list</code></td><td><code>List&lt;T&gt;</code> / <code>MutableList&lt;T&gt;</code></td><td>불변/가변 구분</td></tr>
+        <tr><td><code>dict</code></td><td><code>Map&lt;K, V&gt;</code> / <code>MutableMap&lt;K, V&gt;</code></td><td>불변/가변 구분</td></tr>
+        <tr><td><code>set</code></td><td><code>Set&lt;T&gt;</code> / <code>MutableSet&lt;T&gt;</code></td><td>불변/가변 구분</td></tr>
+        <tr><td><code>None</code></td><td><code>null</code></td><td>다음 섹션에서 자세히</td></tr>
+        <tr><td><code>Any</code> (typing)</td><td><code>Any</code></td><td>모든 타입의 최상위</td></tr>
+        <tr><td><code>tuple</code></td><td><code>Pair&lt;A,B&gt;</code> / <code>Triple&lt;A,B,C&gt;</code></td><td>또는 data class 사용</td></tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: 왜 정적 타입이 좋은가</div>
+      <p>
+        Python에서 <code>mypy</code>를 쓰면 타입 검사를 할 수 있지만, 선택사항이고 런타임에 강제되지 않습니다.
+        Kotlin은 <strong>컴파일 시점에 타입 에러를 100% 잡아냅니다</strong>.
+        "이 함수에 str을 넣어야 하는데 int를 넣었네?" 같은 버그가 코드를 실행하기도 전에 발견됩니다.
+      </p>
+    </div>
+
+    <!-- 3. Null Safety -->
+    <h2 id="null-safety"><span class="section-num">3</span> Null Safety</h2>
+
+    <p>
+      Python에서 가장 흔한 에러 중 하나: <code>AttributeError: 'NoneType' has no attribute 'xxx'</code>.
+      Kotlin은 이 문제를 <strong>타입 시스템 수준에서 원천 차단</strong>합니다.
+    </p>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python: None은 어디든 들어감</div>
+        <pre><code class="language-python"># None이 들어올 수 있는지 코드만 봐서는 모름
+def find_user(id: int) -> User | None:
+    ...
+
+user = find_user(42)
+# user가 None일 수도 있는데...
+print(user.name)  # AttributeError! (런타임)</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin: null 가능 여부가 타입에 명시</div>
+        <pre><code class="language-kotlin">// String  → null 불가
+// String? → null 가능 (물음표!)
+val name: String = "BTC"
+// name = null  // 컴파일 에러!
+
+val nickname: String? = null  // OK
+
+// null일 수 있는 값은 바로 사용 불가
+// nickname.length  // 컴파일 에러!</code></pre>
+      </div>
+    </div>
+
+    <h3>Null 처리 연산자들</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>연산자</th>
+          <th>이름</th>
+          <th>의미</th>
+          <th>Python 대응</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>?.</code></td>
+          <td>Safe call</td>
+          <td>null이면 전체가 null, 아니면 실행</td>
+          <td><code>x.y if x else None</code></td>
+        </tr>
+        <tr>
+          <td><code>?:</code></td>
+          <td>Elvis 연산자</td>
+          <td>null이면 오른쪽 기본값 사용</td>
+          <td><code>x if x is not None else default</code></td>
+        </tr>
+        <tr>
+          <td><code>!!</code></td>
+          <td>Non-null assertion</td>
+          <td>"null 아님을 보장" (null이면 예외 발생)</td>
+          <td><code>assert x is not None; x</code></td>
+        </tr>
+        <tr>
+          <td><code>?.let { }</code></td>
+          <td>Safe call + 스코프</td>
+          <td>null이 아닐 때만 블록 실행</td>
+          <td><code>if x is not None: ...</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python</div>
+        <pre><code class="language-python"># Safe navigation (수동)
+name = user.name if user else None
+length = len(name) if name else 0
+
+# 기본값
+display_name = name if name else "익명"
+
+# None이 아님을 단언
+assert user is not None
+print(user.name)
+
+# None이 아닐 때만 처리
+if user is not None:
+    print(user.name)</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin</div>
+        <pre><code class="language-kotlin">// ?. (Safe call)
+val name = user?.name       // user가 null이면 name도 null
+val length = name?.length ?: 0  // 체이닝 가능
+
+// ?: (Elvis 연산자)
+val displayName = name ?: "익명"
+
+// !! (Non-null assertion, 위험!)
+val userName = user!!.name  // null이면 NPE 발생
+
+// ?.let { } (null이 아닐 때만)
+user?.let { u ->
+    println(u.name)
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-warning">
+      <div class="box-title">주의: <code>!!</code>는 최후의 수단</div>
+      <p>
+        <code>!!</code>는 "null이 아님을 내가 보장한다"는 의미입니다. 실제로 null이면 <code>NullPointerException</code>이
+        발생합니다. Python의 <code>assert</code>처럼 방어적이지 않으므로, 가능하면 <code>?.</code>이나 <code>?:</code>를 사용하세요.
+      </p>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        Kotlin에서는 <strong>null이 될 수 있는 타입(<code>?</code>)과 없는 타입이 다릅니다</strong>.<br>
+        <code>String</code> vs <code>String?</code> = 별개의 타입.<br>
+        덕분에 <code>NoneType has no attribute</code> 류의 런타임 에러가 컴파일 시점에 잡힙니다.
+      </p>
+    </div>
+
+    <!-- 4. 함수 -->
+    <h2 id="functions"><span class="section-num">4</span> 함수</h2>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python</div>
+        <pre><code class="language-python"># 기본 함수
+def greet(name: str) -> str:
+    return f"Hello, {name}!"
+
+# 기본값 매개변수
+def create_order(
+    symbol: str,
+    size: int = 1,
+    leverage: int = 5
+) -> dict:
+    return {
+        "symbol": symbol,
+        "size": size,
+        "leverage": leverage
+    }
+
+# Named argument
+order = create_order(
+    symbol="BTC_USDT",
+    leverage=10
+)
+
+# 한 줄 함수 (드물게 사용)
+double = lambda x: x * 2</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin</div>
+        <pre><code class="language-kotlin">// 기본 함수 (fun 키워드!)
+fun greet(name: String): String {
+    return "Hello, $name!"
+}
+
+// 기본값 매개변수 (Python과 동일!)
+fun createOrder(
+    symbol: String,
+    size: Int = 1,
+    leverage: Int = 5
+): Map&lt;String, Any&gt; {
+    return mapOf(
+        "symbol" to symbol,
+        "size" to size,
+        "leverage" to leverage
+    )
+}
+
+// Named argument (Python과 동일!)
+val order = createOrder(
+    symbol = "BTC_USDT",
+    leverage = 10
+)
+
+// 한 줄 함수 (= 으로 바로 반환)
+fun double(x: Int) = x * 2</code></pre>
+      </div>
+    </div>
+
+    <h3>문자열 템플릿</h3>
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python: f-string</div>
+        <pre><code class="language-python">name = "BTC"
+price = 50000
+print(f"{name} 가격: ${price}")
+print(f"2배: ${price * 2}")</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin: 문자열 템플릿</div>
+        <pre><code class="language-kotlin">val name = "BTC"
+val price = 50000
+println("$name 가격: $price")
+println("2배: ${price * 2}")  // 수식은 ${}</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip</div>
+      <p>
+        Kotlin의 함수 문법은 Python과 상당히 비슷합니다.
+        기본값, named argument 모두 지원합니다.
+        가장 큰 차이점: <strong>반환 타입을 명시</strong>해야 하고, <code>fun</code> 키워드를 사용합니다.
+      </p>
+    </div>
+
+    <!-- 5. data class -->
+    <h2 id="data-class"><span class="section-num">5</span> data class vs @dataclass</h2>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python</div>
+        <pre><code class="language-python">from dataclasses import dataclass
+
+@dataclass
+class Order:
+    symbol: str
+    size: int
+    leverage: int = 5
+
+order1 = Order("BTC_USDT", 1)
+order2 = Order("BTC_USDT", 1)
+
+# __eq__ 자동 생성
+print(order1 == order2)  # True
+
+# __repr__ 자동 생성
+print(order1)
+# Order(symbol='BTC_USDT', size=1, leverage=5)
+
+# copy는 직접 만들어야 함
+from dataclasses import replace
+order3 = replace(order1, leverage=10)</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin</div>
+        <pre><code class="language-kotlin">data class Order(
+    val symbol: String,
+    val size: Int,
+    val leverage: Int = 5
+)
+
+val order1 = Order("BTC_USDT", 1)
+val order2 = Order("BTC_USDT", 1)
+
+// equals() 자동 생성
+println(order1 == order2)  // true
+
+// toString() 자동 생성
+println(order1)
+// Order(symbol=BTC_USDT, size=1, leverage=5)
+
+// copy() 자동 생성 (매우 편리!)
+val order3 = order1.copy(leverage = 10)</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        Kotlin <code>data class</code> = Python <code>@dataclass</code>와 거의 동일.<br>
+        자동 생성: <code>equals()</code>, <code>hashCode()</code>, <code>toString()</code>, <strong><code>copy()</code></strong><br>
+        <code>copy()</code>는 특히 편리합니다 &mdash; 불변 객체의 일부 필드만 바꾼 복사본을 쉽게 만듭니다.
+      </p>
+    </div>
+
+    <!-- 6. when -->
+    <h2 id="when"><span class="section-num">6</span> when 표현식</h2>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python: if-elif-else / match</div>
+        <pre><code class="language-python"># if-elif-else
+def get_risk(leverage: int) -> str:
+    if leverage <= 3:
+        return "낮음"
+    elif leverage <= 10:
+        return "중간"
+    elif leverage <= 50:
+        return "높음"
+    else:
+        return "매우 높음"
+
+# Python 3.10+ match (구조적 패턴 매칭)
+def describe_status(code: int) -> str:
+    match code:
+        case 200:
+            return "성공"
+        case 404:
+            return "없음"
+        case _:
+            return "알 수 없음"</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin: when (더 강력한 switch)</div>
+        <pre><code class="language-kotlin">// when은 값을 반환하는 "표현식"
+fun getRisk(leverage: Int): String =
+    when {
+        leverage &lt;= 3  -> "낮음"
+        leverage &lt;= 10 -> "중간"
+        leverage &lt;= 50 -> "높음"
+        else           -> "매우 높음"
+    }
+
+// 값 매칭
+fun describeStatus(code: Int): String =
+    when (code) {
+        200      -> "성공"
+        404      -> "없음"
+        in 500..599 -> "서버 에러"  // 범위!
+        else     -> "알 수 없음"
+    }
+
+// 타입 매칭도 가능!
+fun describe(x: Any): String =
+    when (x) {
+        is String -> "문자열: $x"
+        is Int    -> "숫자: $x"
+        else      -> "뭔지 모름"
+    }</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip</div>
+      <p>
+        <code>when</code>은 Python의 <code>match</code>보다 더 유연합니다.
+        범위(<code>in 1..10</code>), 타입(<code>is String</code>), 조건식 모두 사용 가능하고,
+        <strong>값을 반환하는 표현식</strong>이라 변수에 바로 할당할 수 있습니다.
+      </p>
+    </div>
+
+    <!-- 7. sealed class -->
+    <h2 id="sealed-class"><span class="section-num">7</span> sealed class vs Python Enum</h2>
+
+    <p><code>sealed class</code>는 "이 클래스를 상속할 수 있는 것들이 정해져 있다"는 선언입니다.</p>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python: Enum (값만 가능)</div>
+        <pre><code class="language-python">from enum import Enum
+
+class OrderStatus(Enum):
+    PENDING = "pending"
+    FILLED = "filled"
+    CANCELLED = "cancelled"
+
+# 각 상태에 추가 데이터를 넣기 어려움
+# FILLED에 체결 가격을 넣고 싶으면?
+# → 별도 클래스를 만들어야 함
+
+status = OrderStatus.FILLED
+if status == OrderStatus.FILLED:
+    print("체결됨")
+elif status == OrderStatus.CANCELLED:
+    print("취소됨")</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin: sealed class (데이터 포함 가능!)</div>
+        <pre><code class="language-kotlin">sealed class OrderStatus {
+    data object Pending : OrderStatus()
+    data class Filled(
+        val price: Double,     // 체결 가격
+        val filledAt: Long     // 체결 시각
+    ) : OrderStatus()
+    data class Cancelled(
+        val reason: String     // 취소 사유
+    ) : OrderStatus()
+}
+
+// when과 조합하면 강력!
+fun describe(status: OrderStatus): String =
+    when (status) {
+        is OrderStatus.Pending ->
+            "대기 중"
+        is OrderStatus.Filled ->
+            "${status.price}에 체결"
+        is OrderStatus.Cancelled ->
+            "취소: ${status.reason}"
+        // else 불필요! 컴파일러가 모든 케이스 확인
+    }</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <code>sealed class</code> = Enum + 각 항목이 <strong>서로 다른 데이터</strong>를 가질 수 있음.<br>
+        <code>when</code>과 함께 쓰면 <strong>모든 케이스를 빠짐없이 처리</strong>하는지 컴파일러가 검사합니다.<br>
+        Python의 Enum은 단순한 값 나열에 그치지만, sealed class는 상태 + 데이터를 함께 표현합니다.
+      </p>
+    </div>
+
+    <!-- 8. 컬렉션 -->
+    <h2 id="collections"><span class="section-num">8</span> 컬렉션</h2>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python</div>
+        <pre><code class="language-python">prices = [50000, 48000, 52000, 47000]
+
+# filter
+high = [p for p in prices if p > 49000]
+# [50000, 52000]
+
+# map
+doubled = [p * 2 for p in prices]
+# [100000, 96000, 104000, 94000]
+
+# sum
+total = sum(prices)
+
+# sort
+sorted_prices = sorted(prices)
+
+# dict groupby
+from itertools import groupby
+contracts = ["BTC_USDT", "ETH_USDT", "BTC_KRW"]
+by_base = {}
+for c in contracts:
+    base = c.split("_")[0]
+    by_base.setdefault(base, []).append(c)
+# {'BTC': ['BTC_USDT', 'BTC_KRW'], 'ETH': ['ETH_USDT']}</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin</div>
+        <pre><code class="language-kotlin">val prices = listOf(50000, 48000, 52000, 47000)
+
+// filter
+val high = prices.filter { it > 49000 }
+// [50000, 52000]
+
+// map
+val doubled = prices.map { it * 2 }
+// [100000, 96000, 104000, 94000]
+
+// sum
+val total = prices.sum()
+
+// sort
+val sortedPrices = prices.sorted()
+
+// groupBy (한 줄로!)
+val contracts = listOf("BTC_USDT", "ETH_USDT", "BTC_KRW")
+val byBase = contracts.groupBy {
+    it.split("_")[0]
+}
+// {BTC=[BTC_USDT, BTC_KRW], ETH=[ETH_USDT]}</code></pre>
+      </div>
+    </div>
+
+    <h3>자주 쓰는 컬렉션 함수 대응표</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>작업</th>
+          <th>Python</th>
+          <th>Kotlin</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>필터</td><td><code>[x for x in list if ...]</code></td><td><code>list.filter { ... }</code></td></tr>
+        <tr><td>변환</td><td><code>[f(x) for x in list]</code></td><td><code>list.map { ... }</code></td></tr>
+        <tr><td>필터+변환</td><td>두 번 리스트 컴프리헨션</td><td><code>list.filter { }.map { }</code></td></tr>
+        <tr><td>합계</td><td><code>sum(list)</code></td><td><code>list.sum()</code></td></tr>
+        <tr><td>최대/최소</td><td><code>max(list)</code></td><td><code>list.max()</code></td></tr>
+        <tr><td>존재 확인</td><td><code>any(x for x in list if ...)</code></td><td><code>list.any { ... }</code></td></tr>
+        <tr><td>전부 확인</td><td><code>all(x for x in list if ...)</code></td><td><code>list.all { ... }</code></td></tr>
+        <tr><td>그룹핑</td><td><code>itertools.groupby</code> (복잡)</td><td><code>list.groupBy { ... }</code></td></tr>
+        <tr><td>첫 번째</td><td><code>next(x for x in list if ...)</code></td><td><code>list.first { ... }</code></td></tr>
+        <tr><td>평탄화</td><td>중첩 리스트 컴프리헨션</td><td><code>list.flatMap { ... }</code></td></tr>
+        <tr><td>중복 제거</td><td><code>list(set(list))</code></td><td><code>list.distinct()</code></td></tr>
+        <tr><td>연관 맵</td><td><code>{x.id: x for x in list}</code></td><td><code>list.associateBy { it.id }</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: <code>it</code>이란?</div>
+      <p>
+        람다에 매개변수가 하나뿐이면 <code>it</code>이라는 암시적 이름을 사용합니다.
+        <code>prices.filter { it > 49000 }</code>에서 <code>it</code>은 각 가격 값입니다.
+        Python의 리스트 컴프리헨션에서 <code>for x in list</code>의 <code>x</code>와 같은 역할입니다.
+      </p>
+    </div>
+
+    <!-- 9. 확장 함수 -->
+    <h2 id="extension"><span class="section-num">9</span> 확장 함수</h2>
+
+    <p>
+      <strong>Python에는 없는 개념!</strong>
+      기존 클래스를 수정하지 않고 새 메서드를 추가할 수 있습니다.
+    </p>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python: 기존 클래스에 메서드 추가 (꼼수)</div>
+        <pre><code class="language-python"># Python에서는 이런 게 불가능하거나 꼼수
+# str에 메서드를 추가하고 싶다면?
+
+# 방법 1: 별도 유틸 함수 (깔끔하지 않음)
+def to_contract_pair(s: str) -> tuple:
+    base, quote = s.split("_")
+    return (base, quote)
+
+pair = to_contract_pair("BTC_USDT")
+
+# 방법 2: 상속 (과도한 방법)
+class ContractStr(str):
+    def to_pair(self):
+        return self.split("_")</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin: 확장 함수 (깔끔!)</div>
+        <pre><code class="language-kotlin">// String에 새 메서드 추가!
+fun String.toContractPair(): Pair&lt;String, String&gt; {
+    val (base, quote) = this.split("_")
+    return Pair(base, quote)
+}
+
+// 마치 원래 있던 메서드처럼 사용
+val pair = "BTC_USDT".toContractPair()
+// Pair("BTC", "USDT")
+
+// 실용 예: Double에 퍼센트 변환 추가
+fun Double.toPercent(): String =
+    "%.2f%%".format(this * 100)
+
+val ratio = 0.053
+println(ratio.toPercent())  // "5.30%"</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        확장 함수 = <strong>기존 클래스의 소스 코드를 건드리지 않고 메서드를 추가</strong>하는 기능.<br>
+        <code>fun 타입.함수명()</code> 형태로 선언. 유틸리티 함수를 객체의 메서드처럼 쓸 수 있어서 코드가 읽기 좋아집니다.
+      </p>
+    </div>
+
+    <!-- 10. 람다 -->
+    <h2 id="lambda"><span class="section-num">10</span> 람다 / 고차 함수</h2>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python</div>
+        <pre><code class="language-python"># 람다 (한 줄만 가능)
+double = lambda x: x * 2
+
+# 고차 함수
+def apply(value, func):
+    return func(value)
+
+result = apply(5, lambda x: x * 2)  # 10
+
+# map/filter에 람다
+prices = [50000, 48000, 52000]
+high = list(filter(
+    lambda p: p > 49000, prices
+))
+
+# 여러 줄이면 일반 함수
+def process(price):
+    tax = price * 0.1
+    fee = price * 0.01
+    return price - tax - fee
+
+results = list(map(process, prices))</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin</div>
+        <pre><code class="language-kotlin">// 람다 (여러 줄 가능!)
+val double = { x: Int -> x * 2 }
+
+// 고차 함수 (함수를 매개변수로)
+fun apply(value: Int, func: (Int) -> Int): Int {
+    return func(value)
+}
+
+val result = apply(5) { it * 2 }  // 10
+
+// 마지막 매개변수가 람다면 괄호 밖으로
+val prices = listOf(50000, 48000, 52000)
+val high = prices.filter { it > 49000 }
+
+// 여러 줄 람다
+val results = prices.map { price ->
+    val tax = price * 0.1
+    val fee = price * 0.01
+    price - tax - fee  // 마지막 줄이 반환값
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: 중괄호 밖으로 빼기 (Trailing Lambda)</div>
+      <p>
+        함수의 마지막 매개변수가 람다이면, 괄호 밖에 <code>{ }</code>로 쓸 수 있습니다.<br>
+        <code>list.filter({ it > 0 })</code> 대신 <code>list.filter { it > 0 }</code>처럼 쓰면 훨씬 깔끔합니다.<br>
+        이것이 Kotlin 코드가 DSL(도메인 특화 언어)처럼 읽히는 비결입니다.
+      </p>
+    </div>
+
+    <!-- 11. companion object -->
+    <h2 id="companion"><span class="section-num">11</span> companion object vs @classmethod / @staticmethod</h2>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python</div>
+        <pre><code class="language-python">class Order:
+    # 클래스 변수
+    MAX_LEVERAGE = 100
+
+    def __init__(self, symbol: str, size: int):
+        self.symbol = symbol
+        self.size = size
+
+    # 팩토리 메서드 (classmethod)
+    @classmethod
+    def from_dict(cls, data: dict) -> "Order":
+        return cls(data["symbol"], data["size"])
+
+    # 유틸 메서드 (staticmethod)
+    @staticmethod
+    def validate_symbol(symbol: str) -> bool:
+        return "_" in symbol
+
+# 사용
+order = Order.from_dict({"symbol": "BTC_USDT", "size": 1})
+valid = Order.validate_symbol("BTC_USDT")
+print(Order.MAX_LEVERAGE)  # 100</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin</div>
+        <pre><code class="language-kotlin">class Order(
+    val symbol: String,
+    val size: Int
+) {
+    // companion object = 클래스에 딸린 싱글톤
+    companion object {
+        // 클래스 상수
+        const val MAX_LEVERAGE = 100
+
+        // 팩토리 메서드
+        fun fromMap(data: Map&lt;String, Any&gt;): Order {
+            return Order(
+                data["symbol"] as String,
+                data["size"] as Int
+            )
+        }
+
+        // 유틸 메서드
+        fun validateSymbol(symbol: String): Boolean {
+            return "_" in symbol
+        }
+    }
+}
+
+// 사용 (Python과 동일한 느낌!)
+val order = Order.fromMap(mapOf("symbol" to "BTC_USDT", "size" to 1))
+val valid = Order.validateSymbol("BTC_USDT")
+println(Order.MAX_LEVERAGE)  // 100</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <code>companion object</code> = Python의 <code>@classmethod</code> + <code>@staticmethod</code> + 클래스 변수를 모아놓은 곳.<br>
+        클래스 안에 하나만 존재할 수 있고, <code>ClassName.method()</code> 형태로 호출합니다.
+      </p>
+    </div>
+
+    <!-- 12. 코루틴 -->
+    <h2 id="coroutines"><span class="section-num">12</span> 코루틴 기초</h2>
+
+    <p>
+      Python의 <code>asyncio</code>를 써봤다면 Kotlin 코루틴도 빠르게 이해할 수 있습니다.
+      이 프로젝트에서는 <code>kotlinx-coroutines-core</code> 라이브러리를 사용합니다.
+    </p>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python: asyncio</div>
+        <pre><code class="language-python">import asyncio
+
+# async 함수 선언
+async def fetch_price(symbol: str) -> float:
+    await asyncio.sleep(1)  # 네트워크 대기 시뮬
+    return 50000.0
+
+# async 함수 안에서만 await 가능
+async def main():
+    price = await fetch_price("BTC_USDT")
+    print(f"가격: {price}")
+
+# 실행
+asyncio.run(main())
+
+# 동시 실행 (병렬)
+async def main_parallel():
+    prices = await asyncio.gather(
+        fetch_price("BTC_USDT"),
+        fetch_price("ETH_USDT"),
+    )
+    print(prices)</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Kotlin: Coroutines</div>
+        <pre><code class="language-kotlin">import kotlinx.coroutines.*
+
+// suspend 함수 = async def
+suspend fun fetchPrice(symbol: String): Double {
+    delay(1000)  // 네트워크 대기 시뮬
+    return 50000.0
+}
+
+// suspend 함수 안에서만 다른 suspend 호출 가능
+suspend fun main() {
+    val price = fetchPrice("BTC_USDT")
+    println("가격: $price")
+}
+
+// 동시 실행 (병렬)
+suspend fun mainParallel() = coroutineScope {
+    val btc = async { fetchPrice("BTC_USDT") }
+    val eth = async { fetchPrice("ETH_USDT") }
+
+    println("BTC: ${btc.await()}")
+    println("ETH: ${eth.await()}")
+}</code></pre>
+      </div>
+    </div>
+
+    <h3>핵심 개념 대응표</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Python asyncio</th>
+          <th>Kotlin Coroutines</th>
+          <th>역할</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>async def</code></td><td><code>suspend fun</code></td><td>비동기 함수 선언</td></tr>
+        <tr><td><code>await</code></td><td>그냥 호출 (자동 suspend)</td><td>결과 대기</td></tr>
+        <tr><td><code>asyncio.gather()</code></td><td><code>async { } + await()</code></td><td>동시 실행</td></tr>
+        <tr><td><code>asyncio.run()</code></td><td><code>runBlocking { }</code></td><td>코루틴 진입점</td></tr>
+        <tr><td><code>asyncio.sleep()</code></td><td><code>delay()</code></td><td>비동기 대기</td></tr>
+        <tr><td>이벤트 루프</td><td><code>CoroutineScope</code> + <code>Dispatcher</code></td><td>실행 컨텍스트</td></tr>
+      </tbody>
+    </table>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <code>suspend</code> = Python의 <code>async</code>. 이 함수는 "중단될 수 있다"는 표시입니다.<br>
+        Python과 달리 <code>await</code> 키워드가 필요 없습니다 &mdash; suspend 함수를 호출하면 자동으로 대기합니다.<br>
+        병렬 실행은 <code>async { }</code>로 시작하고 <code>.await()</code>로 결과를 받습니다.
+      </p>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: 이 프로젝트에서 코루틴을 쓰는 이유</div>
+      <p>
+        <code>gate-futures-bot</code>은 거래소 API를 주기적으로 호출합니다.
+        네트워크 IO를 기다리는 동안 다른 작업(다른 계약의 가격 체크 등)을 할 수 있게
+        코루틴을 사용합니다. Python에서 aiohttp로 비동기 HTTP를 쓰는 것과 같은 맥락입니다.
+      </p>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="guide-nav">
+      <a href="00-environment-setup.html">&larr; 이전: 환경 설정</a>
+      <span class="spacer"></span>
+      <a href="02-gradle-basics.html">다음: Gradle 이해하기 &rarr;</a>
+    </nav>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+</body>
+</html>

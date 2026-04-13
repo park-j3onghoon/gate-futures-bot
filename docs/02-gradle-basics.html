@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>02 - Gradle 이해하기 | gate-futures-bot 학습 가이드</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>02 - Gradle 이해하기</h1>
+      <p class="subtitle">Python의 pip + Makefile을 합친 빌드 도구</p>
+      <span class="badge badge-gradle">Gradle 8.14</span>
+    </header>
+
+    <!-- TOC -->
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#what-is-gradle">Gradle이란</a></li>
+        <li><a href="#build-file">build.gradle.kts 한 줄씩 해부</a></li>
+        <li><a href="#wrapper">Gradle Wrapper 깊이 이해</a></li>
+        <li><a href="#commands">주요 명령어</a></li>
+        <li><a href="#lifecycle">빌드 라이프사이클</a></li>
+      </ol>
+    </div>
+
+    <!-- 1. Gradle이란 -->
+    <h2 id="what-is-gradle"><span class="section-num">1</span> Gradle이란</h2>
+
+    <p>
+      Python 개발에서는 여러 도구를 조합합니다: <code>pip</code>으로 의존성 설치, <code>pytest</code>로 테스트,
+      <code>Makefile</code>로 자동화. <strong>Gradle은 이 모든 걸 하나로 합친 도구</strong>입니다.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>역할</th>
+          <th>Python 세계</th>
+          <th>Gradle</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>의존성 관리</td>
+          <td><code>pip install -r requirements.txt</code></td>
+          <td><code>dependencies { }</code> 블록</td>
+        </tr>
+        <tr>
+          <td>패키지 저장소</td>
+          <td>PyPI (<code>pypi.org</code>)</td>
+          <td>Maven Central (<code>mavenCentral()</code>)</td>
+        </tr>
+        <tr>
+          <td>빌드/컴파일</td>
+          <td>필요 없음 (인터프리터 언어)</td>
+          <td><code>compileKotlin</code> 태스크</td>
+        </tr>
+        <tr>
+          <td>테스트 실행</td>
+          <td><code>pytest</code></td>
+          <td><code>./gradlew test</code></td>
+        </tr>
+        <tr>
+          <td>자동화 스크립트</td>
+          <td><code>Makefile</code></td>
+          <td><code>tasks { }</code> 블록</td>
+        </tr>
+        <tr>
+          <td>패키징</td>
+          <td><code>python setup.py bdist_wheel</code></td>
+          <td><code>./gradlew bootJar</code></td>
+        </tr>
+        <tr>
+          <td>설정 파일 형식</td>
+          <td><code>pyproject.toml</code> / <code>setup.cfg</code></td>
+          <td><code>build.gradle.kts</code> (Kotlin 스크립트)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: .kts는 뭔가</div>
+      <p>
+        <code>build.gradle.kts</code>의 <code>.kts</code>는 "Kotlin Script"의 약자입니다.
+        빌드 설정을 Kotlin 문법으로 작성합니다. 예전에는 Groovy 언어로 <code>build.gradle</code>을 썼는데,
+        요즘은 Kotlin DSL(<code>.kts</code>)이 표준입니다. 타입 추론과 자동완성이 되는 장점이 있습니다.
+      </p>
+    </div>
+
+    <!-- 2. build.gradle.kts 해부 -->
+    <h2 id="build-file"><span class="section-num">2</span> build.gradle.kts 한 줄씩 해부</h2>
+
+    <p>
+      이 프로젝트의 실제 <code>build.gradle.kts</code> 파일을 블록별로 분해해서 설명합니다.
+    </p>
+
+    <!-- 2-1. plugins -->
+    <h3 id="plugins">plugins 블록: "이 프로젝트에 어떤 기능을 켤지"</h3>
+
+    <pre><code class="language-kotlin">plugins {
+    kotlin("jvm") version "2.1.20"              // (1)
+    kotlin("plugin.spring") version "2.1.20"    // (2)
+    id("org.springframework.boot") version "3.5.3"  // (3)
+    id("io.spring.dependency-management") version "1.1.7"  // (4)
+    id("jacoco")                                // (5)
+}</code></pre>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>플러그인</th>
+          <th>하는 일</th>
+          <th>Python 비유</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>(1)</td>
+          <td><code>kotlin("jvm")</code></td>
+          <td>Kotlin 소스를 JVM 바이트코드로 컴파일</td>
+          <td>Python 인터프리터 자체에 해당</td>
+        </tr>
+        <tr>
+          <td>(2)</td>
+          <td><code>kotlin("plugin.spring")</code></td>
+          <td>Kotlin 클래스를 Spring이 쓸 수 있게 <code>open</code> 처리</td>
+          <td>없음 (Python 클래스는 기본적으로 상속 가능)</td>
+        </tr>
+        <tr>
+          <td>(3)</td>
+          <td><code>org.springframework.boot</code></td>
+          <td>실행 가능한 JAR 생성, <code>bootRun</code> 태스크 추가</td>
+          <td><code>manage.py runserver</code> 가능하게 하는 것</td>
+        </tr>
+        <tr>
+          <td>(4)</td>
+          <td><code>io.spring.dependency-management</code></td>
+          <td>Spring 관련 라이브러리 버전 자동 맞춤</td>
+          <td>requirements.txt에서 버전 충돌 해결</td>
+        </tr>
+        <tr>
+          <td>(5)</td>
+          <td><code>jacoco</code></td>
+          <td>코드 커버리지 측정</td>
+          <td><code>pytest --cov</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: kotlin("plugin.spring")이 필요한 이유</div>
+      <p>
+        Kotlin 클래스는 기본적으로 <code>final</code>(상속 불가)입니다. 하지만 Spring은 내부적으로
+        프록시(상속 기반)를 만들어 DI를 처리합니다. 이 플러그인은 Spring 관련 클래스를 자동으로
+        <code>open</code>(상속 가능)으로 변환합니다. Python에서는 클래스가 기본적으로 상속 가능하므로 이런 문제가 없습니다.
+      </p>
+    </div>
+
+    <!-- 2-2. 프로젝트 메타데이터 -->
+    <h3 id="metadata">프로젝트 메타데이터</h3>
+
+    <pre><code class="language-kotlin">group = "com.parkj3onghoon"      // 네임스페이스 (Java 패키지 관례)
+version = "0.0.1-SNAPSHOT"      // 버전. SNAPSHOT = 개발 중
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)  // JDK 21 사용
+    }
+}</code></pre>
+
+    <table>
+      <thead>
+        <tr>
+          <th>설정</th>
+          <th>값</th>
+          <th>Python 비유</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>group</code></td>
+          <td><code>"com.parkj3onghoon"</code></td>
+          <td><code>setup.py</code>의 <code>author</code> / 패키지 네임스페이스</td>
+        </tr>
+        <tr>
+          <td><code>version</code></td>
+          <td><code>"0.0.1-SNAPSHOT"</code></td>
+          <td><code>setup.py</code>의 <code>version</code></td>
+        </tr>
+        <tr>
+          <td><code>toolchain</code></td>
+          <td>JDK 21</td>
+          <td><code>python_requires='>=3.12'</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: SNAPSHOT이란</div>
+      <p>
+        <code>SNAPSHOT</code>은 "아직 정식 릴리스가 아닌 개발 중인 버전"이라는 표시입니다.
+        Python에서 <code>0.0.1.dev0</code> 또는 <code>0.0.1a1</code> 같은 프리릴리스 버전과 같은 개념입니다.
+        정식 출시 시 <code>0.1.0</code>으로 바꿉니다.
+      </p>
+    </div>
+
+    <!-- 2-3. repositories -->
+    <h3 id="repositories">repositories: 라이브러리를 어디서 다운받을지</h3>
+
+    <pre><code class="language-kotlin">repositories {
+    mavenCentral()    // Java/Kotlin 라이브러리의 "PyPI"
+}</code></pre>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python</div>
+        <pre><code class="language-bash"># pip는 기본적으로 PyPI에서 다운로드
+pip install requests
+
+# 사내 저장소 추가 시
+pip install --index-url https://internal.pypi.com/simple/ my-package</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Gradle</div>
+        <pre><code class="language-kotlin">repositories {
+    mavenCentral()  // 공개 저장소 (기본)
+
+    // 사내 저장소 추가 시
+    // maven {
+    //     url = uri("https://internal.repo.com")
+    // }
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 2-4. dependencies -->
+    <h3 id="dependencies">dependencies: 이 프로젝트가 사용하는 라이브러리</h3>
+
+    <pre><code class="language-kotlin">dependencies {
+    // Spring Boot
+    implementation("org.springframework.boot:spring-boot-starter")          // (1)
+    implementation("org.springframework.boot:spring-boot-configuration-processor") // (2)
+
+    // Kotlin
+    implementation("org.jetbrains.kotlin:kotlin-reflect")                   // (3)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2") // (4)
+
+    // Gate.io SDK
+    implementation("io.gate:gate-api:7.1.8")                               // (5)
+
+    // Test
+    testImplementation("org.springframework.boot:spring-boot-starter-test") // (6)
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")           // (7)
+    testImplementation("io.mockk:mockk:1.13.16")                           // (8)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2") // (9)
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")           // (10)
+}</code></pre>
+
+    <h4>의존성 좌표 형식</h4>
+    <p>
+      <code>"org.springframework.boot:spring-boot-starter"</code>는 <strong>group:artifact</strong> 형식입니다.
+      Python의 <code>pip install django</code>가 이름만으로 설치하는 것과 달리,
+      Java/Kotlin은 <code>그룹:이름:버전</code>으로 라이브러리를 식별합니다.
+    </p>
+
+    <div class="mermaid">
+flowchart LR
+    COORD["org.springframework.boot : spring-boot-starter : 3.5.3"]
+    GROUP["group<br/>org.springframework.boot<br/>(누가 만들었나)"]
+    ARTIFACT["artifact<br/>spring-boot-starter<br/>(라이브러리 이름)"]
+    VERSION["version<br/>3.5.3<br/>(생략 시 BOM에서 관리)"]
+
+    COORD --> GROUP
+    COORD --> ARTIFACT
+    COORD --> VERSION
+
+    style COORD fill:#e3f2fd,stroke:#2196f3,color:#000
+    style GROUP fill:#fff3e0,stroke:#ff9800,color:#000
+    style ARTIFACT fill:#e8f5e9,stroke:#4caf50,color:#000
+    style VERSION fill:#f3e5f5,stroke:#7c4dff,color:#000
+    </div>
+
+    <h4>스코프(Scope): implementation vs testImplementation vs testRuntimeOnly</h4>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Gradle 스코프</th>
+          <th>언제 사용되는가</th>
+          <th>Python 비유</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>implementation</code></td>
+          <td>앱 코드 컴파일 + 실행 시 모두 필요</td>
+          <td><code>requirements.txt</code>의 일반 항목</td>
+        </tr>
+        <tr>
+          <td><code>testImplementation</code></td>
+          <td>테스트 코드에서만 사용 (프로덕션에는 포함 안 됨)</td>
+          <td><code>requirements-dev.txt</code>의 <code>pytest</code> 등</td>
+        </tr>
+        <tr>
+          <td><code>testRuntimeOnly</code></td>
+          <td>테스트 실행 시에만 필요 (컴파일에는 불필요)</td>
+          <td>테스트 러너 플러그인</td>
+        </tr>
+        <tr>
+          <td><code>runtimeOnly</code></td>
+          <td>실행 시에만 필요 (컴파일에는 불필요)</td>
+          <td>DB 드라이버 등</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="mermaid">
+flowchart TB
+    subgraph COMPILE["컴파일 시"]
+        IMPL_C["implementation ✅"]
+        TEST_C["testImplementation ✅<br/>(테스트 코드 컴파일)"]
+        RUNTIME_C["runtimeOnly ❌"]
+        TEST_RUNTIME_C["testRuntimeOnly ❌"]
+    end
+
+    subgraph RUN["실행 시"]
+        IMPL_R["implementation ✅"]
+        RUNTIME_R["runtimeOnly ✅"]
+    end
+
+    subgraph TEST["테스트 실행 시"]
+        IMPL_T["implementation ✅"]
+        TEST_T["testImplementation ✅"]
+        RUNTIME_T["runtimeOnly ✅"]
+        TEST_RUNTIME_T["testRuntimeOnly ✅"]
+    end
+
+    style COMPILE fill:#e3f2fd,stroke:#2196f3,color:#000
+    style RUN fill:#e8f5e9,stroke:#4caf50,color:#000
+    style TEST fill:#f3e5f5,stroke:#7c4dff,color:#000
+    </div>
+
+    <h4>각 의존성이 하는 일</h4>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>라이브러리</th>
+          <th>역할</th>
+          <th>Python 비유</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>(1)</td>
+          <td><code>spring-boot-starter</code></td>
+          <td>Spring Boot 핵심 (DI, 설정, 로깅)</td>
+          <td><code>django</code> 패키지 자체</td>
+        </tr>
+        <tr>
+          <td>(2)</td>
+          <td><code>configuration-processor</code></td>
+          <td>설정 바인딩 시 자동완성/검증 지원</td>
+          <td><code>django-environ</code></td>
+        </tr>
+        <tr>
+          <td>(3)</td>
+          <td><code>kotlin-reflect</code></td>
+          <td>Kotlin 리플렉션 (런타임 타입 검사)</td>
+          <td><code>inspect</code> 모듈</td>
+        </tr>
+        <tr>
+          <td>(4)</td>
+          <td><code>kotlinx-coroutines-core</code></td>
+          <td>코루틴 라이브러리</td>
+          <td><code>asyncio</code> (내장이 아닌 외부 라이브러리)</td>
+        </tr>
+        <tr>
+          <td>(5)</td>
+          <td><code>gate-api</code></td>
+          <td>Gate.io 거래소 API SDK</td>
+          <td><code>ccxt</code> 또는 거래소 공식 SDK</td>
+        </tr>
+        <tr>
+          <td>(6)</td>
+          <td><code>spring-boot-starter-test</code></td>
+          <td>테스트 프레임워크 묶음 (JUnit 5 등)</td>
+          <td><code>pytest</code> + <code>django.test</code></td>
+        </tr>
+        <tr>
+          <td>(7)</td>
+          <td><code>kotlin-test-junit5</code></td>
+          <td>Kotlin 테스트 유틸 + JUnit 5 연동</td>
+          <td><code>pytest</code> 확장</td>
+        </tr>
+        <tr>
+          <td>(8)</td>
+          <td><code>mockk</code></td>
+          <td>Kotlin용 모킹 라이브러리</td>
+          <td><code>unittest.mock</code></td>
+        </tr>
+        <tr>
+          <td>(9)</td>
+          <td><code>kotlinx-coroutines-test</code></td>
+          <td>코루틴 테스트 유틸</td>
+          <td><code>pytest-asyncio</code></td>
+        </tr>
+        <tr>
+          <td>(10)</td>
+          <td><code>junit-platform-launcher</code></td>
+          <td>JUnit 테스트 실행 엔진</td>
+          <td>pytest 내부 러너</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 2-5. kotlin 블록 -->
+    <h3 id="kotlin-block">kotlin 블록: 컴파일러 옵션</h3>
+
+    <pre><code class="language-kotlin">kotlin {
+    compilerOptions {
+        freeCompilerArgs.addAll("-Xjsr305=strict")
+    }
+}</code></pre>
+
+    <p>
+      <code>-Xjsr305=strict</code>는 Java 라이브러리의 null 어노테이션을 Kotlin이 엄격하게 해석하도록 합니다.
+      예를 들어 Java 라이브러리가 <code>@NonNull</code>을 썼으면 Kotlin에서도 null 불가로 취급합니다.
+    </p>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip</div>
+      <p>
+        이 설정은 Java ↔ Kotlin 상호운용에서 null safety를 더 강화하는 옵션입니다.
+        순수 Kotlin 코드만 쓴다면 큰 영향은 없지만, Spring Boot 내부는 Java로 작성되어 있으므로
+        이 설정이 유용합니다.
+      </p>
+    </div>
+
+    <!-- 2-6. tasks -->
+    <h3 id="tasks">tasks 블록: 빌드 자동화 설정</h3>
+
+    <pre><code class="language-kotlin">// 테스트 실행 시 JUnit 5 플랫폼 사용
+tasks.withType&lt;Test&gt; {
+    useJUnitPlatform()
+}
+
+// JaCoCo 커버리지 리포트 설정
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)      // 테스트 먼저 실행 후 리포트 생성
+    reports {
+        xml.required = true     // CI에서 읽을 XML 리포트
+        html.required = true    // 브라우저로 볼 HTML 리포트
+    }
+}</code></pre>
+
+    <div class="comparison">
+      <div class="col col-python">
+        <div class="col-header">Python: Makefile</div>
+        <pre><code class="language-bash"># Makefile
+test:
+    pytest --cov=myapp --cov-report=html
+
+lint:
+    flake8 myapp/
+
+all: lint test</code></pre>
+      </div>
+      <div class="col col-kotlin">
+        <div class="col-header">Gradle: tasks 블록</div>
+        <pre><code class="language-kotlin">// build.gradle.kts
+tasks.withType&lt;Test&gt; {
+    useJUnitPlatform()
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+// Makefile의 타겟 = Gradle의 태스크</code></pre>
+      </div>
+    </div>
+
+    <!-- 3. Gradle Wrapper -->
+    <h2 id="wrapper"><span class="section-num">3</span> Gradle Wrapper 깊이 이해</h2>
+
+    <div class="mermaid">
+sequenceDiagram
+    participant 개발자
+    participant gradlew as gradlew (쉘 스크립트)
+    participant jar as gradle-wrapper.jar
+    participant cache as ~/.gradle/
+    participant internet as services.gradle.org
+
+    개발자->>gradlew: ./gradlew build
+    gradlew->>jar: Gradle 있나 확인
+    alt 캐시에 Gradle 없음 (첫 실행)
+        jar->>internet: Gradle 8.14.4 다운로드
+        internet-->>jar: gradle-8.14.4-bin.zip
+        jar->>cache: 저장 (~/.gradle/wrapper/dists/)
+    end
+    jar->>cache: Gradle 8.14.4 로드
+    cache-->>개발자: 빌드 태스크 실행!
+    </div>
+
+    <h3>파일별 역할</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>파일</th>
+          <th>역할</th>
+          <th>Git에 포함?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>gradlew</code></td>
+          <td>Mac/Linux용 실행 스크립트 (bash)</td>
+          <td>Yes</td>
+        </tr>
+        <tr>
+          <td><code>gradlew.bat</code></td>
+          <td>Windows용 실행 스크립트</td>
+          <td>Yes</td>
+        </tr>
+        <tr>
+          <td><code>gradle-wrapper.jar</code></td>
+          <td>Gradle 다운로더 (작은 Java 프로그램, ~60KB)</td>
+          <td>Yes</td>
+        </tr>
+        <tr>
+          <td><code>gradle-wrapper.properties</code></td>
+          <td>사용할 Gradle 버전 URL</td>
+          <td>Yes</td>
+        </tr>
+        <tr>
+          <td><code>~/.gradle/wrapper/dists/</code></td>
+          <td>다운로드된 Gradle 바이너리 캐시</td>
+          <td>No (로컬)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <strong>Gradle Wrapper 파일들은 반드시 Git에 커밋합니다.</strong>
+        이렇게 하면 프로젝트를 clone한 누구나 <code>./gradlew build</code> 한 줄로
+        정확히 같은 버전의 Gradle로 빌드할 수 있습니다. Gradle을 시스템에 별도 설치할 필요가 없습니다.
+      </p>
+    </div>
+
+    <!-- 4. 주요 명령어 -->
+    <h2 id="commands"><span class="section-num">4</span> 주요 명령어</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Gradle 명령어</th>
+          <th>하는 일</th>
+          <th>Python 대응</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>./gradlew build</code></td>
+          <td>컴파일 + 테스트 + JAR 생성 (전부)</td>
+          <td><code>pip install -e . && pytest && python setup.py bdist_wheel</code></td>
+        </tr>
+        <tr>
+          <td><code>./gradlew test</code></td>
+          <td>테스트만 실행</td>
+          <td><code>pytest</code></td>
+        </tr>
+        <tr>
+          <td><code>./gradlew bootRun</code></td>
+          <td>애플리케이션 실행</td>
+          <td><code>python manage.py runserver</code></td>
+        </tr>
+        <tr>
+          <td><code>./gradlew clean</code></td>
+          <td><code>build/</code> 디렉토리 삭제 (처음부터 다시)</td>
+          <td><code>rm -rf __pycache__ .pytest_cache build dist</code></td>
+        </tr>
+        <tr>
+          <td><code>./gradlew dependencies</code></td>
+          <td>의존성 트리 출력</td>
+          <td><code>pip freeze</code> (더 상세함)</td>
+        </tr>
+        <tr>
+          <td><code>./gradlew tasks</code></td>
+          <td>사용 가능한 모든 태스크 목록</td>
+          <td><code>make help</code></td>
+        </tr>
+        <tr>
+          <td><code>./gradlew jacocoTestReport</code></td>
+          <td>테스트 커버리지 리포트 생성</td>
+          <td><code>pytest --cov --cov-report=html</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>명령어 실행 예시</h3>
+
+    <pre><code class="language-bash"># 빌드 (가장 많이 씀)
+./gradlew build
+
+# 테스트만
+./gradlew test
+
+# 앱 실행
+./gradlew bootRun
+
+# 클린 빌드 (캐시 문제 시)
+./gradlew clean build
+
+# 의존성 트리 확인
+./gradlew dependencies --configuration runtimeClasspath
+
+# 특정 테스트만 실행
+./gradlew test --tests "com.parkj3onghoon.gatefuturesbot.MyTest"
+
+# 테스트 커버리지
+./gradlew jacocoTestReport
+# → build/reports/jacoco/test/html/index.html 을 브라우저로 열기</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: clean build는 언제 쓰나</div>
+      <p>
+        빌드가 이상하게 실패할 때 <code>./gradlew clean build</code>를 실행하면 대부분 해결됩니다.
+        <code>clean</code>은 <code>build/</code> 디렉토리를 통째로 삭제하고 처음부터 빌드합니다.
+        Python에서 <code>__pycache__</code>를 삭제하고 다시 실행하는 것과 같습니다.
+      </p>
+    </div>
+
+    <!-- 5. 빌드 라이프사이클 -->
+    <h2 id="lifecycle"><span class="section-num">5</span> 빌드 라이프사이클</h2>
+
+    <p>
+      <code>./gradlew build</code>를 실행하면 내부적으로 여러 태스크가 순서대로 실행됩니다.
+      각 태스크는 이전 태스크에 의존합니다.
+    </p>
+
+    <div class="mermaid">
+flowchart TB
+    subgraph COMPILE["컴파일 단계"]
+        A["compileKotlin<br/>Kotlin 소스 → .class 바이트코드"]
+        B["processResources<br/>application.yml 등 리소스 복사"]
+    end
+
+    subgraph ASSEMBLE["조립 단계"]
+        C["classes<br/>컴파일 결과물 모음"]
+        D["jar<br/>일반 JAR 생성"]
+        E["bootJar<br/>실행 가능한 Fat JAR 생성<br/>(모든 의존성 포함)"]
+    end
+
+    subgraph TEST_PHASE["테스트 단계"]
+        F["compileTestKotlin<br/>테스트 코드 컴파일"]
+        G["test<br/>JUnit 5 테스트 실행"]
+    end
+
+    subgraph VERIFY["검증 단계"]
+        H["check<br/>모든 검증 통과 확인"]
+        I["build<br/>최종 빌드 완료"]
+    end
+
+    A --> C
+    B --> C
+    C --> D --> E
+    C --> F --> G
+    G --> H
+    E --> H
+    H --> I
+
+    style COMPILE fill:#e3f2fd,stroke:#2196f3,color:#000
+    style ASSEMBLE fill:#e8f5e9,stroke:#4caf50,color:#000
+    style TEST_PHASE fill:#f3e5f5,stroke:#7c4dff,color:#000
+    style VERIFY fill:#fff3e0,stroke:#ff9800,color:#000
+    style I fill:#4caf50,stroke:#2e7d32,color:#fff
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        <code>build</code> = <code>compileKotlin</code> + <code>processResources</code> +
+        <code>test</code> + <code>jar</code> + <code>bootJar</code> + <code>check</code><br>
+        각 태스크는 필요한 이전 태스크를 자동으로 실행합니다 (의존성 그래프).<br>
+        <code>./gradlew test</code>만 실행해도 <code>compileKotlin</code>이 먼저 자동 실행됩니다.
+      </p>
+    </div>
+
+    <h3>산출물 위치</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>경로</th>
+          <th>내용</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>build/classes/</code></td>
+          <td>컴파일된 .class 파일 (Python의 .pyc)</td>
+        </tr>
+        <tr>
+          <td><code>build/libs/gate-futures-bot-0.0.1-SNAPSHOT.jar</code></td>
+          <td>실행 가능한 JAR (모든 의존성 포함)</td>
+        </tr>
+        <tr>
+          <td><code>build/reports/tests/test/index.html</code></td>
+          <td>테스트 결과 리포트 (브라우저로 열기)</td>
+        </tr>
+        <tr>
+          <td><code>build/reports/jacoco/test/html/index.html</code></td>
+          <td>커버리지 리포트 (브라우저로 열기)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: JAR이란</div>
+      <p>
+        <strong>JAR (Java ARchive)</strong>은 컴파일된 코드 + 리소스를 하나의 ZIP 파일로 묶은 것입니다.
+        <code>bootJar</code>로 생성된 JAR은 <code>java -jar gate-futures-bot-0.0.1-SNAPSHOT.jar</code>로
+        바로 실행할 수 있습니다. Python의 <code>.whl</code> 파일과 비슷하지만, 실행까지 가능한 점이 다릅니다.
+      </p>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="guide-nav">
+      <a href="01-kotlin-basics.html">&larr; 이전: Kotlin 기초</a>
+      <span class="spacer"></span>
+      <a href="03-spring-boot-basics.html">다음: Spring Boot 기초 &rarr;</a>
+    </nav>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+</body>
+</html>

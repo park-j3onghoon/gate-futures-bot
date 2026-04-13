@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gate-futures-bot 학습 가이드</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <header class="guide-header">
+      <h1>gate-futures-bot 학습 가이드</h1>
+      <p class="subtitle">Python/Django 개발자를 위한 Kotlin + Spring Boot + Gradle 입문</p>
+      <div>
+        <span class="badge badge-kotlin">Kotlin 2.1</span>
+        <span class="badge badge-spring">Spring Boot 3.5</span>
+        <span class="badge badge-gradle">Gradle 8.14</span>
+      </div>
+    </header>
+
+    <!-- 이 가이드에 대해 -->
+    <h2>이 가이드에 대해</h2>
+    <p>
+      이 가이드는 <strong>Python(Django) 개발자</strong>가 <strong>Kotlin + Spring Boot + Gradle</strong> 기술 스택을
+      처음부터 이해할 수 있도록 작성되었습니다. "k도 모르고 s도 모르고 g도 모른다"는 전제에서 출발하며,
+      가능한 모든 개념을 Python/Django와 비교하여 설명합니다.
+    </p>
+
+    <div class="box box-tip">
+      <div class="box-title">Tip: 학습 방법</div>
+      <p>
+        각 가이드는 <strong>순서대로 읽는 것</strong>을 권장합니다.
+        환경 설정부터 시작해서 Kotlin 문법, 빌드 도구, 프레임워크 순으로 점진적으로 깊어집니다.
+        코드 예제는 반드시 직접 타이핑해보세요.
+      </p>
+    </div>
+
+    <!-- 기술 스택 개요 -->
+    <h2>기술 스택 개요</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>역할</th>
+          <th>Python 세계</th>
+          <th>이 프로젝트</th>
+          <th>비고</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>언어</strong></td>
+          <td>Python 3.x</td>
+          <td>Kotlin 2.1</td>
+          <td>JVM 위에서 동작, Java와 100% 호환</td>
+        </tr>
+        <tr>
+          <td><strong>런타임</strong></td>
+          <td>CPython</td>
+          <td>JDK 21 (Temurin)</td>
+          <td>Java Virtual Machine</td>
+        </tr>
+        <tr>
+          <td><strong>프레임워크</strong></td>
+          <td>Django</td>
+          <td>Spring Boot 3.5</td>
+          <td>Java/Kotlin 생태계의 대표 프레임워크</td>
+        </tr>
+        <tr>
+          <td><strong>빌드/패키지</strong></td>
+          <td>pip + Makefile</td>
+          <td>Gradle 8.14</td>
+          <td>의존성 관리 + 빌드 + 테스트 자동화</td>
+        </tr>
+        <tr>
+          <td><strong>테스트</strong></td>
+          <td>pytest</td>
+          <td>JUnit 5 + MockK</td>
+          <td>JUnit = Java 표준, MockK = Kotlin 모킹</td>
+        </tr>
+        <tr>
+          <td><strong>패키지 저장소</strong></td>
+          <td>PyPI</td>
+          <td>Maven Central</td>
+          <td>Java/Kotlin 라이브러리 배포 저장소</td>
+        </tr>
+        <tr>
+          <td><strong>비동기</strong></td>
+          <td>asyncio</td>
+          <td>Kotlin Coroutines</td>
+          <td>suspend 함수 기반 비동기</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 학습 순서 로드맵 -->
+    <h2>학습 순서 로드맵</h2>
+    <p>아래 다이어그램은 권장하는 학습 순서입니다. 화살표 방향으로 따라가세요.</p>
+
+    <div class="mermaid">
+flowchart TB
+    subgraph PHASE1["1단계: 기반 다지기"]
+        A["00 - 환경 설정<br/>JDK, Gradle, 프로젝트 구조"]
+        B["01 - Kotlin 기초<br/>Python과 비교하며 문법 익히기"]
+    end
+
+    subgraph PHASE2["2단계: 도구 이해"]
+        C["02 - Gradle 이해하기<br/>빌드, 의존성, 명령어"]
+    end
+
+    subgraph PHASE3["3단계: 프레임워크"]
+        D["03 - Spring Boot 기초<br/>DI, 설정, 테스트 (Django 비교)"]
+    end
+
+    subgraph PHASE4["4단계: 실전"]
+        E["프로젝트 코드 읽기<br/>gate-futures-bot 분석"]
+    end
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+
+    style PHASE1 fill:#e3f2fd,stroke:#2196f3,color:#000
+    style PHASE2 fill:#fff3e0,stroke:#ff9800,color:#000
+    style PHASE3 fill:#e8f5e9,stroke:#4caf50,color:#000
+    style PHASE4 fill:#f3e5f5,stroke:#7c4dff,color:#000
+    style A fill:#bbdefb,stroke:#1976d2,color:#000
+    style B fill:#bbdefb,stroke:#1976d2,color:#000
+    style C fill:#ffe0b2,stroke:#f57c00,color:#000
+    style D fill:#c8e6c9,stroke:#388e3c,color:#000
+    style E fill:#e1bee7,stroke:#7b1fa2,color:#000
+    </div>
+
+    <!-- 프로젝트 아키텍처 개요 -->
+    <h2>프로젝트 아키텍처 개요</h2>
+    <p>
+      <code>gate-futures-bot</code>은 Gate.io 거래소의 선물(Futures) 거래를 자동화하는 봇입니다.
+      아래는 전체 구조를 보여주는 다이어그램입니다.
+    </p>
+
+    <div class="mermaid">
+flowchart LR
+    subgraph APP["gate-futures-bot (Spring Boot)"]
+        direction TB
+        CONFIG["설정 로딩<br/>application.yml"]
+        BOT["봇 로직<br/>주기적 체크 & 주문"]
+        API_CLIENT["Gate.io API 클라이언트<br/>io.gate:gate-api SDK"]
+    end
+
+    subgraph EXCHANGE["Gate.io 거래소"]
+        FUTURES["선물 거래 API<br/>api.gateio.ws"]
+    end
+
+    CONFIG --> BOT
+    BOT --> API_CLIENT
+    API_CLIENT -->|"REST API 호출"| FUTURES
+    FUTURES -->|"시세/포지션 응답"| API_CLIENT
+
+    style APP fill:#e8f5e9,stroke:#4caf50,color:#000
+    style EXCHANGE fill:#fff3e0,stroke:#ff9800,color:#000
+    style CONFIG fill:#c8e6c9,stroke:#388e3c,color:#000
+    style BOT fill:#c8e6c9,stroke:#388e3c,color:#000
+    style API_CLIENT fill:#c8e6c9,stroke:#388e3c,color:#000
+    style FUTURES fill:#ffe0b2,stroke:#f57c00,color:#000
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <p>
+        이 프로젝트는 <strong>Spring Boot</strong>로 애플리케이션을 구성하고,
+        <strong>Kotlin Coroutines</strong>으로 비동기 처리를 하며,
+        <strong>Gate.io Java SDK</strong>를 통해 거래소 API를 호출합니다.
+        <code>application.yml</code>에서 API 키, 거래 대상, 레버리지 등을 설정합니다.
+      </p>
+    </div>
+
+    <!-- 학습 가이드 목록 -->
+    <h2>학습 가이드 목록</h2>
+    <div class="card-grid">
+      <a href="00-environment-setup.html" class="card">
+        <div class="card-number">0</div>
+        <div class="card-title">환경 설정</div>
+        <div class="card-desc">JDK 설치, Gradle Wrapper, Spring Initializr, 프로젝트 구조 이해</div>
+      </a>
+      <a href="01-kotlin-basics.html" class="card">
+        <div class="card-number">1</div>
+        <div class="card-title">Kotlin 기초</div>
+        <div class="card-desc">Python과 나란히 비교하며 배우는 Kotlin 핵심 문법</div>
+      </a>
+      <a href="02-gradle-basics.html" class="card">
+        <div class="card-number">2</div>
+        <div class="card-title">Gradle 이해하기</div>
+        <div class="card-desc">build.gradle.kts 해부, 빌드 라이프사이클, 주요 명령어</div>
+      </a>
+      <a href="03-spring-boot-basics.html" class="card">
+        <div class="card-number">3</div>
+        <div class="card-title">Spring Boot 기초</div>
+        <div class="card-desc">Django 비교로 배우는 DI, 설정, Bean, 테스트</div>
+      </a>
+    </div>
+
+    <!-- 프로젝트 디렉토리 미리보기 -->
+    <h2>프로젝트 디렉토리 구조 미리보기</h2>
+    <div class="dir-tree">
+gate-futures-bot/
+├── build.gradle.kts          <span class="comment">← 빌드 설정 (pip + Makefile 역할)</span>
+├── settings.gradle.kts       <span class="comment">← 프로젝트 이름 설정</span>
+├── gradlew / gradlew.bat     <span class="comment">← Gradle Wrapper 실행 스크립트</span>
+├── gradle/
+│   └── wrapper/              <span class="comment">← Gradle Wrapper 내부 파일</span>
+├── src/
+│   ├── main/
+│   │   ├── kotlin/           <span class="comment">← Kotlin 소스 코드</span>
+│   │   │   └── com/parkj3onghoon/gatefuturesbot/
+│   │   │       └── GateFuturesBotApplication.kt
+│   │   └── resources/
+│   │       └── application.yml  <span class="comment">← 설정 파일 (settings.py 역할)</span>
+│   └── test/
+│       └── kotlin/           <span class="comment">← 테스트 코드</span>
+├── build/                    <span class="comment">← 빌드 산출물 (자동 생성)</span>
+└── docs/                     <span class="comment">← 이 학습 가이드</span>
+    </div>
+
+    <!-- Footer Nav -->
+    <nav class="guide-nav">
+      <span class="spacer"></span>
+      <a href="00-environment-setup.html">다음: 환경 설정 &rarr;</a>
+    </nav>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

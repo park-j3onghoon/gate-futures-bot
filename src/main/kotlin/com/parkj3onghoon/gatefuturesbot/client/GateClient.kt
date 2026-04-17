@@ -4,6 +4,7 @@ import com.parkj3onghoon.gatefuturesbot.config.ApiProperties
 import com.parkj3onghoon.gatefuturesbot.exception.AuthenticationException
 import com.parkj3onghoon.gatefuturesbot.exception.GateFuturesException
 import com.parkj3onghoon.gatefuturesbot.exception.InsufficientBalanceException
+import com.parkj3onghoon.gatefuturesbot.exception.MarketDataException
 import com.parkj3onghoon.gatefuturesbot.exception.OrderException
 import com.parkj3onghoon.gatefuturesbot.exception.RateLimitException
 import com.parkj3onghoon.gatefuturesbot.model.Candle
@@ -14,9 +15,11 @@ import io.gate.gateapi.ApiException
 import io.gate.gateapi.GateApiException
 import io.gate.gateapi.api.FuturesApi
 import io.gate.gateapi.models.FuturesAccount
+import io.gate.gateapi.models.FuturesCandlestick
 import io.gate.gateapi.models.FuturesOrder
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import io.gate.gateapi.models.Position as SdkPosition
 
 @Component
 class GateClient(
@@ -45,7 +48,7 @@ class GateClient(
             this.tif = tif
         }
         logger.debug("주문 생성: contract={}, size={}, price={}, tif={}", contract, size, price, tif)
-        OrderResult.from(futuresApi.createFuturesOrder(apiProperties.settle, order, null))
+        toOrderResult(futuresApi.createFuturesOrder(apiProperties.settle, order, null))
     }
 
     fun closePosition(contract: String): OrderResult =
@@ -58,13 +61,13 @@ class GateClient(
                 this.close = true
             }
             logger.debug("포지션 청산: contract={}", contract)
-            OrderResult.from(futuresApi.createFuturesOrder(apiProperties.settle, order, null))
+            toOrderResult(futuresApi.createFuturesOrder(apiProperties.settle, order, null))
         }
 
     fun getPosition(contract: String): Position? =
         callApi("getPosition(contract=$contract)") {
             val pos = futuresApi.getPosition(apiProperties.settle, contract).execute()
-            if (pos.size == null || pos.size == 0L) null else Position.from(pos)
+            if (pos.size == null || pos.size == 0L) null else toPosition(pos)
         }
 
     fun updateLeverage(contract: String, leverage: Int) {
@@ -98,7 +101,39 @@ class GateClient(
             "캔들 조회: contract={}, interval={}, limit={}, count={}",
             contract, interval.code, limit, candles.size
         )
-        candles.map { Candle.from(it) }
+        candles.map { toCandle(it) }
+    }
+
+    private fun toOrderResult(order: FuturesOrder): OrderResult = OrderResult(
+        id = order.id ?: throw OrderException("주문 응답에 id가 없습니다"),
+        contract = order.contract ?: throw OrderException("주문 응답에 contract가 없습니다"),
+        size = order.size ?: throw OrderException("주문 응답에 size가 없습니다"),
+        price = order.price ?: "0",
+        status = order.status?.value ?: "unknown",
+        fillPrice = order.fillPrice ?: "0",
+        createTime = order.createTime ?: 0.0
+    )
+
+    private fun toPosition(pos: SdkPosition): Position = Position(
+        contract = pos.contract ?: "",
+        size = pos.size ?: 0L,
+        entryPrice = pos.entryPrice ?: "0",
+        leverage = pos.leverage?.toIntOrNull() ?: 0,
+        unrealisedPnl = pos.unrealisedPnl ?: "0",
+        realisedPnl = pos.realisedPnl ?: "0"
+    )
+
+    private fun toCandle(c: FuturesCandlestick): Candle {
+        val t = c.t ?: throw MarketDataException("캔들 응답에 timestamp(t)가 없습니다")
+        val close = c.c ?: throw MarketDataException("캔들 응답에 close(c)가 없습니다")
+        val open = c.o ?: throw MarketDataException("캔들 응답에 open(o)가 없습니다")
+        val high = c.h ?: throw MarketDataException("캔들 응답에 high(h)가 없습니다")
+        val low = c.l ?: throw MarketDataException("캔들 응답에 low(l)가 없습니다")
+        return Candle(
+            timestamp = t.toLong(),
+            open = open, high = high, low = low, close = close,
+            volume = c.v ?: 0L
+        )
     }
 
     fun getAccount(): FuturesAccount? = callApi("getAccount()") {

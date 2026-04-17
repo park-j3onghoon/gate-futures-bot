@@ -1,7 +1,9 @@
 package com.parkj3onghoon.gatefuturesbot.model
 
-import io.gate.gateapi.models.Position as GatePosition
-
+/**
+ * 포지션 도메인 모델.
+ * SDK 타입과의 매핑은 GateClient가 담당한다.
+ */
 data class Position(
     val contract: String,
     val size: Long,
@@ -9,15 +11,4 @@ data class Position(
     val leverage: Int,
     val unrealisedPnl: String,
     val realisedPnl: String
-) {
-    companion object {
-        fun from(pos: GatePosition): Position = Position(
-            contract = pos.contract ?: "",
-            size = pos.size ?: 0L,
-            entryPrice = pos.entryPrice ?: "0",
-            leverage = pos.leverage?.toIntOrNull() ?: 0,
-            unrealisedPnl = pos.unrealisedPnl ?: "0",
-            realisedPnl = pos.realisedPnl ?: "0"
-        )
-    }
-}
+)

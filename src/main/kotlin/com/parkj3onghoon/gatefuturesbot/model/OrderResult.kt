@@ -1,8 +1,9 @@
 package com.parkj3onghoon.gatefuturesbot.model
 
-import com.parkj3onghoon.gatefuturesbot.exception.OrderException
-import io.gate.gateapi.models.FuturesOrder
-
+/**
+ * Gate.io 선물 주문 결과 도메인 모델.
+ * SDK 타입(FuturesOrder)과의 매핑은 GateClient가 담당한다.
+ */
 data class OrderResult(
     val id: Long,
     val contract: String,
@@ -11,16 +12,4 @@ data class OrderResult(
     val status: String,
     val fillPrice: String,
     val createTime: Double
-) {
-    companion object {
-        fun from(order: FuturesOrder): OrderResult = OrderResult(
-            id = order.id ?: throw OrderException("주문 응답에 id가 없습니다"),
-            contract = order.contract ?: throw OrderException("주문 응답에 contract가 없습니다"),
-            size = order.size ?: throw OrderException("주문 응답에 size가 없습니다"),
-            price = order.price ?: "0",
-            status = order.status?.value ?: "unknown",
-            fillPrice = order.fillPrice ?: "0",
-            createTime = order.createTime ?: 0.0
-        )
-    }
-}
+)

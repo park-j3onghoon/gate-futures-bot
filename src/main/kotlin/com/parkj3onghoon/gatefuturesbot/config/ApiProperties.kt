@@ -1,13 +1,16 @@
 package com.parkj3onghoon.gatefuturesbot.config
 
+import jakarta.validation.constraints.NotBlank
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.validation.annotation.Validated
 
+@Validated
 @ConfigurationProperties(prefix = "gate.api")
 data class ApiProperties(
     val key: String = "",
     val secret: String = "",
-    val host: String = "https://api.gateio.ws/api/v4",
-    val settle: String = "usdt"
+    @field:NotBlank val host: String = "https://api.gateio.ws/api/v4",
+    @field:NotBlank val settle: String = "usdt"
 ) {
     val isTestnet: Boolean get() = host.contains("testnet")
 

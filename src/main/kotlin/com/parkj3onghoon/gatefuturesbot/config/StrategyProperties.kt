@@ -4,24 +4,28 @@ import com.parkj3onghoon.gatefuturesbot.market.ComparisonOp
 import com.parkj3onghoon.gatefuturesbot.market.Indicator
 import com.parkj3onghoon.gatefuturesbot.strategy.EntryCondition
 import com.parkj3onghoon.gatefuturesbot.strategy.ExitCondition
+import jakarta.validation.Valid
+import jakarta.validation.constraints.Positive
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.validation.annotation.Validated
 
+@Validated
 @ConfigurationProperties(prefix = "strategy")
 data class StrategyProperties(
-    val contracts: Map<String, ContractStrategySpec> = emptyMap()
+    @field:Valid val contracts: Map<String, ContractStrategySpec> = emptyMap()
 )
 
 data class ContractStrategySpec(
-    val longEntries: List<EntryConditionSpec> = emptyList(),
-    val shortEntries: List<EntryConditionSpec> = emptyList(),
-    val exitConditions: List<ExitConditionSpec> = emptyList()
+    @field:Valid val longEntries: List<EntryConditionSpec> = emptyList(),
+    @field:Valid val shortEntries: List<EntryConditionSpec> = emptyList(),
+    @field:Valid val exitConditions: List<ExitConditionSpec> = emptyList()
 )
 
 data class EntryConditionSpec(
     val indicator: Indicator,
     val operator: ComparisonOp,
     val value: Double,
-    val period: Int = 14
+    @field:Positive val period: Int = 14
 ) {
     fun toEntryCondition(): EntryCondition = EntryCondition(indicator, operator, value, period)
 }

@@ -1,5 +1,6 @@
 package com.parkj3onghoon.gatefuturesbot.model
 
+import com.parkj3onghoon.gatefuturesbot.exception.OrderException
 import io.gate.gateapi.models.FuturesOrder
 
 data class OrderResult(
@@ -13,9 +14,9 @@ data class OrderResult(
 ) {
     companion object {
         fun from(order: FuturesOrder): OrderResult = OrderResult(
-            id = order.id ?: 0L,
-            contract = order.contract ?: "",
-            size = order.size ?: 0L,
+            id = order.id ?: throw OrderException("주문 응답에 id가 없습니다"),
+            contract = order.contract ?: throw OrderException("주문 응답에 contract가 없습니다"),
+            size = order.size ?: throw OrderException("주문 응답에 size가 없습니다"),
             price = order.price ?: "0",
             status = order.status?.value ?: "unknown",
             fillPrice = order.fillPrice ?: "0",

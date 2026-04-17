@@ -2,6 +2,7 @@ package com.parkj3onghoon.gatefuturesbot.trading
 
 import com.parkj3onghoon.gatefuturesbot.client.GateClient
 import com.parkj3onghoon.gatefuturesbot.exception.InsufficientBalanceException
+import com.parkj3onghoon.gatefuturesbot.exception.PositionException
 import com.parkj3onghoon.gatefuturesbot.model.OrderResult
 import com.parkj3onghoon.gatefuturesbot.model.Position
 import io.mockk.every
@@ -91,6 +92,42 @@ class FuturesTraderTest {
         every { client.createOrder("BTC_USDT", -1L) } throws InsufficientBalanceException("Insufficient balance")
 
         assertThrows<InsufficientBalanceException> {
+            trader.openShort("BTC_USDT", 1, 5)
+        }
+    }
+
+    @Test
+    fun `should throw PositionException when position already exists on long`() {
+        val existingPosition = Position(
+            contract = "BTC_USDT",
+            size = 1L,
+            entryPrice = "50000",
+            leverage = 5,
+            unrealisedPnl = "100.5",
+            realisedPnl = "50.3"
+        )
+
+        every { client.getPosition("BTC_USDT") } returns existingPosition
+
+        assertThrows<PositionException> {
+            trader.openLong("BTC_USDT", 1, 5)
+        }
+    }
+
+    @Test
+    fun `should throw PositionException when position already exists on short`() {
+        val existingPosition = Position(
+            contract = "BTC_USDT",
+            size = -1L,
+            entryPrice = "50000",
+            leverage = 5,
+            unrealisedPnl = "-50.0",
+            realisedPnl = "0"
+        )
+
+        every { client.getPosition("BTC_USDT") } returns existingPosition
+
+        assertThrows<PositionException> {
             trader.openShort("BTC_USDT", 1, 5)
         }
     }

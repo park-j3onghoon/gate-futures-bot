@@ -32,9 +32,8 @@ class GateClientTest {
             host = "https://api.gateio.ws/api/v4",
             settle = "usdt"
         )
-        client = GateClient(apiProperties)
         futuresApi = mockk()
-        client.futuresApi = futuresApi
+        client = GateClient(apiProperties, futuresApi)
     }
 
     @Test
@@ -45,7 +44,6 @@ class GateClientTest {
             price = "0"
             tif = FuturesOrder.TifEnum.IOC
         }
-        // SDK read-only fields are set via reflection for testing
         setField(responseOrder, "id", 12345L)
         setField(responseOrder, "status", FuturesOrder.StatusEnum.FINISHED)
         setField(responseOrder, "fillPrice", "50000.5")

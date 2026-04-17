@@ -11,6 +11,7 @@ import io.gate.gateapi.models.FuturesOrder
 import io.gate.gateapi.models.Position as GatePosition
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -161,6 +162,34 @@ class GateClientTest {
         val position = client.getPosition("BTC_USDT")
 
         assertNull(position)
+    }
+
+    @Test
+    fun `should close position with close=true and size=0`() {
+        val responseOrder = FuturesOrder().apply {
+            contract = "BTC_USDT"
+            size = 0L
+            price = "0"
+            tif = FuturesOrder.TifEnum.IOC
+        }
+        setField(responseOrder, "id", 777L)
+        setField(responseOrder, "status", FuturesOrder.StatusEnum.FINISHED)
+        setField(responseOrder, "fillPrice", "51000")
+        setField(responseOrder, "createTime", 1700000000.0)
+
+        val orderSlot = slot<FuturesOrder>()
+        every { futuresApi.createFuturesOrder("usdt", capture(orderSlot), null) } returns responseOrder
+
+        val result = client.closePosition("BTC_USDT")
+
+        assertEquals(777L, result.id)
+        assertEquals("BTC_USDT", result.contract)
+        val captured = orderSlot.captured
+        assertEquals("BTC_USDT", captured.contract)
+        assertEquals(0L, captured.size)
+        assertEquals(GateClient.MARKET_PRICE, captured.price)
+        assertEquals(FuturesOrder.TifEnum.IOC, captured.tif)
+        assertEquals(true, captured.close)
     }
 
     private fun setField(obj: Any, fieldName: String, value: Any) {

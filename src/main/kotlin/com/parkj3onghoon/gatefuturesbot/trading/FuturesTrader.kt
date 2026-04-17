@@ -24,6 +24,45 @@ class FuturesTrader(private val client: GateClient) {
         return client.getPosition(contract)
     }
 
+    fun closeLong(contract: String): OrderResult {
+        val position = requirePosition(contract)
+        if (position.size <= 0) {
+            throw PositionException(
+                "롱 포지션이 아닙니다: contract=$contract, size=${position.size}"
+            )
+        }
+        return closeExistingPosition(contract, position, "롱")
+    }
+
+    fun closeShort(contract: String): OrderResult {
+        val position = requirePosition(contract)
+        if (position.size >= 0) {
+            throw PositionException(
+                "숏 포지션이 아닙니다: contract=$contract, size=${position.size}"
+            )
+        }
+        return closeExistingPosition(contract, position, "숏")
+    }
+
+    fun closePosition(contract: String): OrderResult {
+        val position = requirePosition(contract)
+        val direction = if (position.size > 0) "롱" else "숏"
+        return closeExistingPosition(contract, position, direction)
+    }
+
+    private fun requirePosition(contract: String): Position {
+        return client.getPosition(contract)
+            ?: throw PositionException("청산할 포지션이 없습니다: contract=$contract")
+    }
+
+    private fun closeExistingPosition(contract: String, position: Position, direction: String): OrderResult {
+        logger.info(
+            "{} 포지션 청산: contract={}, size={}, entryPrice={}",
+            direction, contract, position.size, position.entryPrice
+        )
+        return client.closePosition(contract)
+    }
+
     private fun openPosition(contract: String, size: Long, leverage: Int, direction: String): OrderResult {
         val currentPosition = client.getPosition(contract)
         if (currentPosition != null) {

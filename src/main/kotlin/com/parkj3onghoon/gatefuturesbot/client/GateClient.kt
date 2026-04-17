@@ -55,6 +55,28 @@ class GateClient(
         }
     }
 
+    fun closePosition(contract: String): OrderResult {
+        return withRetry("closePosition(contract=$contract)") {
+            try {
+                val order = FuturesOrder().apply {
+                    this.contract = contract
+                    this.size = 0L
+                    this.price = MARKET_PRICE
+                    this.tif = FuturesOrder.TifEnum.IOC
+                    this.close = true
+                }
+
+                logger.debug("포지션 청산: contract={}", contract)
+                val result = futuresApi.createFuturesOrder(apiProperties.settle, order, null)
+                OrderResult.from(result)
+            } catch (e: GateApiException) {
+                throw mapGateException(e, "closePosition(contract=$contract)")
+            } catch (e: ApiException) {
+                throw wrapApiException(e, "closePosition(contract=$contract)")
+            }
+        }
+    }
+
     fun getPosition(contract: String): Position? {
         return try {
             val pos = futuresApi.getPosition(apiProperties.settle, contract).execute()

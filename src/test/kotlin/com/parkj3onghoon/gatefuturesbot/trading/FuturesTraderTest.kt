@@ -160,4 +160,159 @@ class FuturesTraderTest {
         assertEquals("BTC_USDT", position.contract)
         assertEquals(1L, position.size)
     }
+
+    @Test
+    fun `should close long position successfully`() {
+        val longPosition = Position(
+            contract = "BTC_USDT",
+            size = 2L,
+            entryPrice = "50000",
+            leverage = 5,
+            unrealisedPnl = "100",
+            realisedPnl = "0"
+        )
+        val closeResult = OrderResult(
+            id = 10L, contract = "BTC_USDT", size = 0L, price = "0",
+            status = "finished", fillPrice = "51000", createTime = 1700000000.0
+        )
+
+        every { client.getPosition("BTC_USDT") } returns longPosition
+        every { client.closePosition("BTC_USDT") } returns closeResult
+
+        val result = trader.closeLong("BTC_USDT")
+
+        assertEquals(10L, result.id)
+        verify { client.closePosition("BTC_USDT") }
+    }
+
+    @Test
+    fun `should close short position successfully`() {
+        val shortPosition = Position(
+            contract = "BTC_USDT",
+            size = -2L,
+            entryPrice = "50000",
+            leverage = 5,
+            unrealisedPnl = "100",
+            realisedPnl = "0"
+        )
+        val closeResult = OrderResult(
+            id = 11L, contract = "BTC_USDT", size = 0L, price = "0",
+            status = "finished", fillPrice = "49000", createTime = 1700000000.0
+        )
+
+        every { client.getPosition("BTC_USDT") } returns shortPosition
+        every { client.closePosition("BTC_USDT") } returns closeResult
+
+        val result = trader.closeShort("BTC_USDT")
+
+        assertEquals(11L, result.id)
+        verify { client.closePosition("BTC_USDT") }
+    }
+
+    @Test
+    fun `should throw PositionException when closing long without position`() {
+        every { client.getPosition("BTC_USDT") } returns null
+
+        assertThrows<PositionException> {
+            trader.closeLong("BTC_USDT")
+        }
+    }
+
+    @Test
+    fun `should throw PositionException when closing short without position`() {
+        every { client.getPosition("BTC_USDT") } returns null
+
+        assertThrows<PositionException> {
+            trader.closeShort("BTC_USDT")
+        }
+    }
+
+    @Test
+    fun `should throw PositionException when closeLong on short position`() {
+        val shortPosition = Position(
+            contract = "BTC_USDT",
+            size = -1L,
+            entryPrice = "50000",
+            leverage = 5,
+            unrealisedPnl = "0",
+            realisedPnl = "0"
+        )
+        every { client.getPosition("BTC_USDT") } returns shortPosition
+
+        assertThrows<PositionException> {
+            trader.closeLong("BTC_USDT")
+        }
+    }
+
+    @Test
+    fun `should throw PositionException when closeShort on long position`() {
+        val longPosition = Position(
+            contract = "BTC_USDT",
+            size = 1L,
+            entryPrice = "50000",
+            leverage = 5,
+            unrealisedPnl = "0",
+            realisedPnl = "0"
+        )
+        every { client.getPosition("BTC_USDT") } returns longPosition
+
+        assertThrows<PositionException> {
+            trader.closeShort("BTC_USDT")
+        }
+    }
+
+    @Test
+    fun `closePosition should auto-detect long direction`() {
+        val longPosition = Position(
+            contract = "BTC_USDT",
+            size = 3L,
+            entryPrice = "50000",
+            leverage = 5,
+            unrealisedPnl = "0",
+            realisedPnl = "0"
+        )
+        val closeResult = OrderResult(
+            id = 20L, contract = "BTC_USDT", size = 0L, price = "0",
+            status = "finished", fillPrice = "51000", createTime = 1700000000.0
+        )
+        every { client.getPosition("BTC_USDT") } returns longPosition
+        every { client.closePosition("BTC_USDT") } returns closeResult
+
+        val result = trader.closePosition("BTC_USDT")
+
+        assertEquals(20L, result.id)
+        verify { client.closePosition("BTC_USDT") }
+    }
+
+    @Test
+    fun `closePosition should auto-detect short direction`() {
+        val shortPosition = Position(
+            contract = "BTC_USDT",
+            size = -3L,
+            entryPrice = "50000",
+            leverage = 5,
+            unrealisedPnl = "0",
+            realisedPnl = "0"
+        )
+        val closeResult = OrderResult(
+            id = 21L, contract = "BTC_USDT", size = 0L, price = "0",
+            status = "finished", fillPrice = "49000", createTime = 1700000000.0
+        )
+        every { client.getPosition("BTC_USDT") } returns shortPosition
+        every { client.closePosition("BTC_USDT") } returns closeResult
+
+        val result = trader.closePosition("BTC_USDT")
+
+        assertEquals(21L, result.id)
+        verify { client.closePosition("BTC_USDT") }
+    }
+
+    @Test
+    fun `closePosition should throw PositionException when no position exists`() {
+        every { client.getPosition("BTC_USDT") } returns null
+
+        assertThrows<PositionException> {
+            trader.closePosition("BTC_USDT")
+        }
+    }
 }

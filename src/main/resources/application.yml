@@ -14,25 +14,9 @@ bot:
   order-size: 1
   check-interval-sec: 60
 
-# 전략 설정 (contract별). 설정 없으면 해당 contract는 no-op
-strategy:
-  contracts:
-    BTC_USDT:
-      long-entries:
-        - indicator: RSI
-          operator: LT
-          value: 30.0
-          period: 14
-      short-entries:
-        - indicator: RSI
-          operator: GT
-          value: 70.0
-          period: 14
-      exit-conditions:
-        - type: TAKE_PROFIT_PCT
-          pct: 5.0
-        - type: STOP_LOSS_PCT
-          pct: 3.0
+# 전략 설정은 profile 파일(application-dev.yml 등)에서 명시적으로 주입한다.
+# application.yml에 기본값을 두지 않는 이유: prod host에서 override를 잊으면
+# 의도하지 않은 기본 전략이 실계좌에서 돌 수 있다. 미정의 contract는 no-op.
 
 # 로깅
 logging:

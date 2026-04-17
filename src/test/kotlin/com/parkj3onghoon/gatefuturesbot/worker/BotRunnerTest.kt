@@ -1,6 +1,9 @@
 package com.parkj3onghoon.gatefuturesbot.worker
 
 import com.parkj3onghoon.gatefuturesbot.bootstrap.StrategyAssembler
+import com.parkj3onghoon.gatefuturesbot.config.ApiProperties
+import com.parkj3onghoon.gatefuturesbot.config.BotProperties
+import com.parkj3onghoon.gatefuturesbot.config.StrategyProperties
 import com.parkj3onghoon.gatefuturesbot.strategy.TradingStrategy
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -13,9 +16,15 @@ import org.junit.jupiter.api.Test
 class BotRunnerTest {
 
     private fun newRunner(orchestrator: WorkerOrchestrator): BotRunner {
-        val factory = mockk<StrategyAssembler>()
-        every { factory.forContract(any()) } returns TradingStrategy()
-        return BotRunner(orchestrator, factory)
+        val assembler = mockk<StrategyAssembler>()
+        every { assembler.forContract(any()) } returns TradingStrategy()
+        return BotRunner(
+            orchestrator = orchestrator,
+            assembler = assembler,
+            apiProperties = ApiProperties(host = "https://fx-api-testnet.gateio.ws/api/v4"),
+            botProperties = BotProperties(),
+            strategyProperties = StrategyProperties()
+        )
     }
 
     @Test

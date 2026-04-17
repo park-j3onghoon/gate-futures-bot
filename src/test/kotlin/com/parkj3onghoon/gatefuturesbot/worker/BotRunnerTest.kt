@@ -1,7 +1,10 @@
 package com.parkj3onghoon.gatefuturesbot.worker
 
+import com.parkj3onghoon.gatefuturesbot.strategy.StrategyFactory
+import com.parkj3onghoon.gatefuturesbot.strategy.TradingStrategy
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -9,12 +12,18 @@ import org.junit.jupiter.api.Test
 
 class BotRunnerTest {
 
+    private fun newRunner(orchestrator: WorkerOrchestrator): BotRunner {
+        val factory = mockk<StrategyFactory>()
+        every { factory.forContract(any()) } returns TradingStrategy()
+        return BotRunner(orchestrator, factory)
+    }
+
     @Test
     fun `start launches orchestrator runAll`() {
         val orchestrator = mockk<WorkerOrchestrator>()
         coEvery { orchestrator.runAll(any()) } coAnswers { awaitCancellation() }
 
-        val runner = BotRunner(orchestrator)
+        val runner = newRunner(orchestrator)
         runner.start()
         Thread.sleep(20)
 
@@ -27,7 +36,7 @@ class BotRunnerTest {
         val orchestrator = mockk<WorkerOrchestrator>()
         coEvery { orchestrator.runAll(any()) } coAnswers { awaitCancellation() }
 
-        val runner = BotRunner(orchestrator)
+        val runner = newRunner(orchestrator)
         runner.start()
         runner.start()
         Thread.sleep(20)
@@ -41,16 +50,15 @@ class BotRunnerTest {
         val orchestrator = mockk<WorkerOrchestrator>()
         coEvery { orchestrator.runAll(any()) } coAnswers { delay(Long.MAX_VALUE) }
 
-        val runner = BotRunner(orchestrator)
+        val runner = newRunner(orchestrator)
         runner.start()
         Thread.sleep(20)
         runner.stop()
-        // stop()이 blocking으로 cancelAndJoin 수행 → 완료 보장
     }
 
     @Test
     fun `stop is no-op when not started`() {
-        val runner = BotRunner(mockk())
+        val runner = newRunner(mockk())
         runner.stop()
     }
 }

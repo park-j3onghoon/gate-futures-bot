@@ -16,6 +16,26 @@ bot:
   take-profit-pct: 5.0
   stop-loss-pct: 3.0
 
+# 전략 설정 (contract별). 설정 없으면 해당 contract는 no-op
+strategy:
+  contracts:
+    BTC_USDT:
+      long-entries:
+        - indicator: RSI
+          operator: LT
+          value: 30.0
+          period: 14
+      short-entries:
+        - indicator: RSI
+          operator: GT
+          value: 70.0
+          period: 14
+      exit-conditions:
+        - type: TAKE_PROFIT_PCT
+          pct: 5.0
+        - type: STOP_LOSS_PCT
+          pct: 3.0
+
 # 로깅
 logging:
   level:

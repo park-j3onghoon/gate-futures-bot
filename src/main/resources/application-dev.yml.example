@@ -1,0 +1,43 @@
+# 개발/Testnet용 프로파일 예시.
+# 실제 키를 넣은 application-dev.yml은 .gitignore 대상이며 이 파일을 복사해서 만든다:
+#   cp src/main/resources/application-dev.yml.example src/main/resources/application-dev.yml
+# 실행:
+#   ./gradlew bootRun --args='--spring.profiles.active=dev'
+
+gate:
+  api:
+    key: <YOUR_TESTNET_API_KEY>
+    secret: <YOUR_TESTNET_API_SECRET>
+    host: https://fx-api-testnet.gateio.ws/api/v4
+    settle: usdt
+
+bot:
+  contracts:
+    - BTC_USDT
+  leverage: 5
+  order-size: 1
+  check-interval-sec: 60
+  take-profit-pct: 5.0
+  stop-loss-pct: 3.0
+
+strategy:
+  contracts:
+    BTC_USDT:
+      long-entries:
+        - indicator: RSI
+          operator: LT
+          value: 30.0
+          period: 14
+      short-entries:
+        - indicator: RSI
+          operator: GT
+          value: 70.0
+          period: 14
+      exit-conditions:
+        - { type: TAKE_PROFIT_PCT, pct: 5.0 }
+        - { type: STOP_LOSS_PCT, pct: 3.0 }
+
+logging:
+  level:
+    com.parkj3onghoon.gatefuturesbot: DEBUG
+    io.gate.gateapi: WARN

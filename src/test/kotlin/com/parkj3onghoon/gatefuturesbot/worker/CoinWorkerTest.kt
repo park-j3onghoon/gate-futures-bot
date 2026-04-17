@@ -8,6 +8,7 @@ import com.parkj3onghoon.gatefuturesbot.model.Position
 import com.parkj3onghoon.gatefuturesbot.ratelimit.RateLimiter
 import com.parkj3onghoon.gatefuturesbot.strategy.ComparisonOp
 import com.parkj3onghoon.gatefuturesbot.strategy.EntryCondition
+import com.parkj3onghoon.gatefuturesbot.strategy.ExitCondition
 import com.parkj3onghoon.gatefuturesbot.strategy.Indicator
 import com.parkj3onghoon.gatefuturesbot.strategy.TradingStrategy
 import com.parkj3onghoon.gatefuturesbot.trading.FuturesTrader
@@ -32,7 +33,7 @@ class CoinWorkerTest {
     private val contract = "BTC_USDT"
 
     @Test
-    fun `runOnce skips entry when position exists`() = runTest {
+    fun `runOnce skips entry when position exists and no exit signal`() = runTest {
         val trader = mockk<FuturesTrader>()
         val marketData = mockk<MarketDataService>()
         val rateLimiter = mockk<RateLimiter>()
@@ -40,13 +41,59 @@ class CoinWorkerTest {
         every { trader.getCurrentPosition(contract) } returns Position(
             contract, 1L, "50000", 5, "0", "0"
         )
+        every { marketData.getCandles(contract, Interval.MIN_1, 100, null, null) } returns
+            flatPriceCandles(20, 50000.0)
 
         val worker = newWorker(trader, marketData, rateLimiter, TradingStrategy())
         worker.runOnce()
 
         verify(exactly = 0) { trader.openLong(any(), any(), any()) }
         verify(exactly = 0) { trader.openShort(any(), any(), any()) }
-        verify(exactly = 0) { marketData.getCandles(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { trader.closePosition(any()) }
+    }
+
+    @Test
+    fun `runOnce closes position when exit signal triggers`() = runTest {
+        val trader = mockk<FuturesTrader>()
+        val marketData = mockk<MarketDataService>()
+        val rateLimiter = mockk<RateLimiter>()
+        coEvery { rateLimiter.acquire() } just Runs
+        val position = Position(contract, 1L, "100", 5, "0", "0")
+        every { trader.getCurrentPosition(contract) } returns position
+        every { marketData.getCandles(contract, Interval.MIN_1, 100, null, null) } returns
+            listOf(candle(1700000000L, 106.0))
+        every { trader.closePosition(contract) } returns OrderResult(
+            100L, contract, 0L, "0", "finished", "106", 1700000000.0
+        )
+
+        val strategy = TradingStrategy(
+            exitConditions = listOf(ExitCondition.TakeProfitPct(5.0))
+        )
+        val worker = newWorker(trader, marketData, rateLimiter, strategy)
+        worker.runOnce()
+
+        verify(exactly = 1) { trader.closePosition(contract) }
+        verify(exactly = 0) { trader.openLong(any(), any(), any()) }
+    }
+
+    @Test
+    fun `runOnce does not close when exit signal is None`() = runTest {
+        val trader = mockk<FuturesTrader>()
+        val marketData = mockk<MarketDataService>()
+        val rateLimiter = mockk<RateLimiter>()
+        coEvery { rateLimiter.acquire() } just Runs
+        val position = Position(contract, 1L, "100", 5, "0", "0")
+        every { trader.getCurrentPosition(contract) } returns position
+        every { marketData.getCandles(contract, Interval.MIN_1, 100, null, null) } returns
+            listOf(candle(1700000000L, 101.0))
+
+        val strategy = TradingStrategy(
+            exitConditions = listOf(ExitCondition.TakeProfitPct(5.0))
+        )
+        val worker = newWorker(trader, marketData, rateLimiter, strategy)
+        worker.runOnce()
+
+        verify(exactly = 0) { trader.closePosition(any()) }
     }
 
     @Test
@@ -150,6 +197,48 @@ class CoinWorkerTest {
 
         worker.updateCandles()
         assertEquals(7, worker.cacheSize(), "dedup by timestamp should add only 2 new candles")
+    }
+
+    @Test
+    fun `full cycle - long entry then exit closes position`() = runTest {
+        val trader = mockk<FuturesTrader>()
+        val marketData = mockk<MarketDataService>()
+        val rateLimiter = mockk<RateLimiter>()
+        coEvery { rateLimiter.acquire() } just Runs
+
+        // 1) 진입 단계: 포지션 없음 + 하락장 → 롱 진입
+        val fallingCandles = fallingPriceCandles(20)
+        every { marketData.getCandles(contract, Interval.MIN_1, 100, null, null) } returns fallingCandles
+        every { trader.openLong(contract, 1, 5) } returns OrderResult(
+            1L, contract, 1L, "0", "finished", "15.5", 1700000000.0
+        )
+        // getCurrentPosition: 1st call → null, 2nd call → 새 포지션
+        val enteredPosition = Position(contract, 1L, "15.5", 5, "0", "0")
+        every { trader.getCurrentPosition(contract) } returnsMany listOf(null, enteredPosition)
+        every { trader.closePosition(contract) } returns OrderResult(
+            2L, contract, 0L, "0", "finished", "17.0", 1700000060.0
+        )
+
+        val strategy = TradingStrategy(
+            longEntries = listOf(EntryCondition(Indicator.RSI, ComparisonOp.LT, 30.0, 14)),
+            exitConditions = listOf(ExitCondition.TakeProfitPct(5.0))
+        )
+        val worker = newWorker(trader, marketData, rateLimiter, strategy)
+
+        // Cycle 1: 진입
+        worker.runOnce()
+        verify(exactly = 1) { trader.openLong(contract, 1, 5) }
+        verify(exactly = 0) { trader.closePosition(any()) }
+
+        // Cycle 2: 포지션 상태에서 가격이 +5% 이상 (15.5 → 17.0 = +9.7%)로 청산 시그널
+        // 델타 조회 (fromSec = 마지막 timestamp)로 상승 캔들 피드
+        val lastTs = fallingCandles.last().timestamp
+        every { marketData.getCandles(contract, Interval.MIN_1, null, lastTs, null) } returns
+            listOf(candle(lastTs + 60, 17.0))
+
+        worker.runOnce()
+        verify(exactly = 1) { trader.closePosition(contract) }
+        verify(exactly = 1) { trader.openLong(contract, 1, 5) } // 재호출 없음
     }
 
     @Test

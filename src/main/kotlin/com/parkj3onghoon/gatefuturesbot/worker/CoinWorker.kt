@@ -3,8 +3,10 @@ package com.parkj3onghoon.gatefuturesbot.worker
 import com.parkj3onghoon.gatefuturesbot.market.MarketDataService
 import com.parkj3onghoon.gatefuturesbot.model.Candle
 import com.parkj3onghoon.gatefuturesbot.model.Interval
+import com.parkj3onghoon.gatefuturesbot.model.Position
 import com.parkj3onghoon.gatefuturesbot.ratelimit.RateLimiter
 import com.parkj3onghoon.gatefuturesbot.strategy.EntrySignal
+import com.parkj3onghoon.gatefuturesbot.strategy.ExitSignal
 import com.parkj3onghoon.gatefuturesbot.strategy.TradingStrategy
 import com.parkj3onghoon.gatefuturesbot.trading.FuturesTrader
 import kotlinx.coroutines.CancellationException
@@ -51,26 +53,46 @@ class CoinWorker(
         try {
             rateLimiter.acquire()
             val position = trader.getCurrentPosition(contract)
-            if (position != null) {
-                logger.debug("기존 포지션 존재, 진입 건너뜀: contract={}, size={}", contract, position.size)
-                return
-            }
             updateCandles()
-            when (val signal = strategy.evaluateEntry(candleCache)) {
-                is EntrySignal.Long -> {
-                    logger.info("롱 진입 시그널: contract={}, conditions={}", contract, signal.matched.size)
-                    trader.openLong(contract, orderSize, leverage)
-                }
-                is EntrySignal.Short -> {
-                    logger.info("숏 진입 시그널: contract={}, conditions={}", contract, signal.matched.size)
-                    trader.openShort(contract, orderSize, leverage)
-                }
-                EntrySignal.None -> logger.debug("진입 시그널 없음: contract={}", contract)
+            if (position != null) {
+                evaluateAndClose(position)
+            } else {
+                evaluateAndEnter()
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             logger.error("워커 iteration 에러: contract=$contract", e)
+        }
+    }
+
+    private fun evaluateAndEnter() {
+        when (val signal = strategy.evaluateEntry(candleCache)) {
+            is EntrySignal.Long -> {
+                logger.info("롱 진입 시그널: contract={}, conditions={}", contract, signal.matched.size)
+                trader.openLong(contract, orderSize, leverage)
+            }
+            is EntrySignal.Short -> {
+                logger.info("숏 진입 시그널: contract={}, conditions={}", contract, signal.matched.size)
+                trader.openShort(contract, orderSize, leverage)
+            }
+            EntrySignal.None -> logger.debug("진입 시그널 없음: contract={}", contract)
+        }
+    }
+
+    private fun evaluateAndClose(position: Position) {
+        when (val signal = strategy.evaluateExit(candleCache, position)) {
+            is ExitSignal.Close -> {
+                val reasons = signal.triggered.joinToString { it::class.simpleName ?: "?" }
+                logger.info(
+                    "청산 시그널: contract={}, size={}, reasons=[{}]",
+                    contract, position.size, reasons
+                )
+                trader.closePosition(contract)
+            }
+            ExitSignal.None -> logger.debug(
+                "청산 시그널 없음: contract={}, size={}", contract, position.size
+            )
         }
     }
 

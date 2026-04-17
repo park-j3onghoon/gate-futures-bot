@@ -6,6 +6,8 @@ import com.parkj3onghoon.gatefuturesbot.exception.GateFuturesException
 import com.parkj3onghoon.gatefuturesbot.exception.InsufficientBalanceException
 import com.parkj3onghoon.gatefuturesbot.exception.OrderException
 import com.parkj3onghoon.gatefuturesbot.exception.RateLimitException
+import com.parkj3onghoon.gatefuturesbot.model.Candle
+import com.parkj3onghoon.gatefuturesbot.model.Interval
 import com.parkj3onghoon.gatefuturesbot.model.OrderResult
 import com.parkj3onghoon.gatefuturesbot.model.Position
 import io.gate.gateapi.ApiException
@@ -106,6 +108,39 @@ class GateClient(
             throw mapGateException(e, "updateLeverage(contract=$contract, leverage=$leverage)")
         } catch (e: ApiException) {
             throw wrapApiException(e, "updateLeverage(contract=$contract, leverage=$leverage)")
+        }
+    }
+
+    fun getCandlesticks(
+        contract: String,
+        interval: Interval,
+        limit: Int? = null,
+        fromSec: Long? = null,
+        toSec: Long? = null
+    ): List<Candle> {
+        return try {
+            val request = futuresApi.listFuturesCandlesticks(apiProperties.settle, contract)
+                .interval(interval.code)
+            limit?.let { request.limit(it) }
+            fromSec?.let { request.from(it) }
+            toSec?.let { request.to(it) }
+
+            val candles = request.execute()
+            logger.debug(
+                "캔들 조회: contract={}, interval={}, limit={}, count={}",
+                contract, interval.code, limit, candles.size
+            )
+            candles.map { Candle.from(it) }
+        } catch (e: GateApiException) {
+            throw mapGateException(
+                e,
+                "getCandlesticks(contract=$contract, interval=${interval.code})"
+            )
+        } catch (e: ApiException) {
+            throw wrapApiException(
+                e,
+                "getCandlesticks(contract=$contract, interval=${interval.code})"
+            )
         }
     }
 

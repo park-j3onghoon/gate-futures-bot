@@ -5,8 +5,10 @@ import com.parkj3onghoon.gatefuturesbot.exception.AuthenticationException
 import com.parkj3onghoon.gatefuturesbot.exception.InsufficientBalanceException
 import com.parkj3onghoon.gatefuturesbot.exception.OrderException
 import com.parkj3onghoon.gatefuturesbot.exception.RateLimitException
+import com.parkj3onghoon.gatefuturesbot.model.Interval
 import io.gate.gateapi.GateApiException
 import io.gate.gateapi.api.FuturesApi
+import io.gate.gateapi.models.FuturesCandlestick
 import io.gate.gateapi.models.FuturesOrder
 import io.gate.gateapi.models.Position as GatePosition
 import io.mockk.every
@@ -190,6 +192,70 @@ class GateClientTest {
         assertEquals(GateClient.MARKET_PRICE, captured.price)
         assertEquals(FuturesOrder.TifEnum.IOC, captured.tif)
         assertEquals(true, captured.close)
+    }
+
+    @Test
+    fun `should fetch candlesticks and map to Candle list`() {
+        val raw1 = FuturesCandlestick().apply {
+            t = 1700000000.0
+            o = "50000"
+            h = "50500"
+            l = "49500"
+            c = "50200"
+            v = 100L
+        }
+        val raw2 = FuturesCandlestick().apply {
+            t = 1700000060.0
+            o = "50200"
+            h = "50800"
+            l = "50100"
+            c = "50600"
+            v = 150L
+        }
+        val request = mockk<FuturesApi.APIlistFuturesCandlesticksRequest>()
+        every { futuresApi.listFuturesCandlesticks("usdt", "BTC_USDT") } returns request
+        every { request.interval("1m") } returns request
+        every { request.limit(100) } returns request
+        every { request.execute() } returns listOf(raw1, raw2)
+
+        val candles = client.getCandlesticks("BTC_USDT", Interval.MIN_1, limit = 100)
+
+        assertEquals(2, candles.size)
+        assertEquals(1700000000L, candles[0].timestamp)
+        assertEquals("50200", candles[0].close)
+        assertEquals(50200.0, candles[0].closePrice)
+        assertEquals(100L, candles[0].volume)
+        verify { request.interval("1m") }
+        verify { request.limit(100) }
+    }
+
+    @Test
+    fun `should fetch candlesticks with time range when from and to provided`() {
+        val request = mockk<FuturesApi.APIlistFuturesCandlesticksRequest>()
+        every { futuresApi.listFuturesCandlesticks("usdt", "BTC_USDT") } returns request
+        every { request.interval("5m") } returns request
+        every { request.from(1000L) } returns request
+        every { request.to(2000L) } returns request
+        every { request.execute() } returns emptyList()
+
+        val candles = client.getCandlesticks("BTC_USDT", Interval.MIN_5, fromSec = 1000L, toSec = 2000L)
+
+        assertEquals(0, candles.size)
+        verify { request.from(1000L) }
+        verify { request.to(2000L) }
+    }
+
+    @Test
+    fun `should throw AuthenticationException when candlesticks returns INVALID_KEY`() {
+        val exception = GateApiException("INVALID_KEY", "Invalid API key", "")
+        val request = mockk<FuturesApi.APIlistFuturesCandlesticksRequest>()
+        every { futuresApi.listFuturesCandlesticks("usdt", "BTC_USDT") } returns request
+        every { request.interval("1h") } returns request
+        every { request.execute() } throws exception
+
+        assertThrows<AuthenticationException> {
+            client.getCandlesticks("BTC_USDT", Interval.HOUR_1)
+        }
     }
 
     private fun setField(obj: Any, fieldName: String, value: Any) {

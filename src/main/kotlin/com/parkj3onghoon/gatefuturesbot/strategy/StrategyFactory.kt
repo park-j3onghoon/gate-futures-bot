@@ -1,9 +1,6 @@
 package com.parkj3onghoon.gatefuturesbot.strategy
 
 import com.parkj3onghoon.gatefuturesbot.config.ContractStrategySpec
-import com.parkj3onghoon.gatefuturesbot.config.EntryConditionSpec
-import com.parkj3onghoon.gatefuturesbot.config.ExitConditionSpec
-import com.parkj3onghoon.gatefuturesbot.config.ExitType
 import com.parkj3onghoon.gatefuturesbot.config.StrategyProperties
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -32,22 +29,4 @@ class StrategyFactory(private val properties: StrategyProperties) {
         shortEntries = shortEntries.map { it.toEntryCondition() },
         exitConditions = exitConditions.map { it.toExitCondition() }
     )
-
-    private fun EntryConditionSpec.toEntryCondition(): EntryCondition =
-        EntryCondition(indicator, operator, value, period)
-
-    private fun ExitConditionSpec.toExitCondition(): ExitCondition = when (type) {
-        ExitType.TAKE_PROFIT_PCT -> ExitCondition.TakeProfitPct(
-            requireNotNull(pct) { "TAKE_PROFIT_PCT requires pct" }
-        )
-        ExitType.STOP_LOSS_PCT -> ExitCondition.StopLossPct(
-            requireNotNull(pct) { "STOP_LOSS_PCT requires pct" }
-        )
-        ExitType.INDICATOR -> ExitCondition.IndicatorExit(
-            indicator = requireNotNull(indicator) { "INDICATOR exit requires indicator" },
-            operator = requireNotNull(operator) { "INDICATOR exit requires operator" },
-            value = requireNotNull(value) { "INDICATOR exit requires value" },
-            period = period
-        )
-    }
 }

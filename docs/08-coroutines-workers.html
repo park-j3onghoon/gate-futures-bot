@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>08 - 코루틴 & 워커 | gate-futures-bot 학습 가이드</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>08 - 코루틴 & 워커 패턴</h1>
+      <p class="subtitle">supervisorScope, Token Bucket, ApplicationReadyEvent</p>
+      <span class="badge badge-kotlin">Kotlin Coroutines 1.10</span>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#why-coroutines">왜 코루틴인가 (프로세스 vs 스레드 vs 코루틴)</a></li>
+        <li><a href="#supervisor">supervisorScope: 에러 격리</a></li>
+        <li><a href="#rate-limiter">Token Bucket RateLimiter</a></li>
+        <li><a href="#coin-worker">CoinWorker 루프</a></li>
+        <li><a href="#orchestrator">WorkerOrchestrator</a></li>
+        <li><a href="#bot-runner">BotRunner: Spring 생명주기 연결</a></li>
+        <li><a href="#python-compare">Python asyncio 비교</a></li>
+      </ol>
+    </div>
+
+    <h2 id="why-coroutines"><span class="section-num">1</span> 왜 코루틴인가</h2>
+    <p>
+      여러 코인을 동시에 거래하려면 동시성이 필요합니다. 3가지 선택지:
+    </p>
+    <table>
+      <thead>
+        <tr><th>접근</th><th>메모리</th><th>에러 격리</th><th>공유 상태</th><th>학습 가치</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>별도 JVM 프로세스</td>
+          <td>~150MB × 코인수</td>
+          <td>OS 수준 (완벽)</td>
+          <td>IPC 필요 (Redis/File)</td>
+          <td>낮음</td>
+        </tr>
+        <tr>
+          <td>스레드 (Thread)</td>
+          <td>~1MB / 스레드</td>
+          <td>없음 (직접 구현)</td>
+          <td>같은 메모리 (락 필요)</td>
+          <td>중간</td>
+        </tr>
+        <tr>
+          <td><strong>코루틴 (채택)</strong></td>
+          <td>~수 KB / 코루틴</td>
+          <td>supervisorScope</td>
+          <td>같은 메모리 (Mutex)</td>
+          <td>높음</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-info">
+      <div class="box-title">코루틴 = suspend 함수 + Dispatcher</div>
+      <p>
+        <code>suspend fun</code>은 "중간에 멈췄다 나중에 재개할 수 있는 함수".
+        <code>delay(1000)</code>은 스레드를 블록하지 않고 다른 코루틴에 양보합니다.
+        수만 개의 코루틴이 수십 개의 스레드 위에서 돌 수 있습니다.
+      </p>
+    </div>
+
+    <h2 id="supervisor"><span class="section-num">2</span> supervisorScope: 에러 격리</h2>
+    <p>
+      기본 <code>coroutineScope</code>는 자식 코루틴 하나가 실패하면 <strong>형제 모두 취소</strong>됩니다.
+      <br><code>supervisorScope</code>는 자식 실패가 형제에 전파되지 않습니다 — 매매 봇에 필수.
+    </p>
+
+<pre><code class="language-kotlin">suspend fun runAll(strategyProvider: (String) -&gt; TradingStrategy) =
+    supervisorScope {
+        botProperties.contracts.forEach { contract -&gt;
+            launch { createWorker(contract, strategyProvider(contract)).run() }
+        }
+    }</code></pre>
+
+    <div class="mermaid">
+flowchart TB
+    SCOPE["supervisorScope"]
+    SCOPE --> W1["BTC 워커"]
+    SCOPE --> W2["ETH 워커"]
+    SCOPE --> W3["SOL 워커"]
+    W1 -.->|"예외 발생"| X["⚠️ 격리"]
+    W2 ==>|"계속 실행"| C1["OK"]
+    W3 ==>|"계속 실행"| C2["OK"]
+
+    style SCOPE fill:#fff3e0,stroke:#ff9800,color:#000
+    style W1 fill:#ffcdd2,stroke:#c62828,color:#000
+    style W2 fill:#c8e6c9,stroke:#388e3c,color:#000
+    style W3 fill:#c8e6c9,stroke:#388e3c,color:#000
+    </div>
+
+    <h2 id="rate-limiter"><span class="section-num">3</span> Token Bucket RateLimiter</h2>
+    <p>
+      Gate.io는 초당 API 호출 수 제한이 있습니다. 모든 워커가 공유하는 토큰 버킷을 사용합니다.
+    </p>
+    <div class="box box-tip">
+      <div class="box-title">Token Bucket 알고리즘</div>
+      <ul>
+        <li>버킷에 토큰이 <strong>capacity</strong>개 있음</li>
+        <li>초당 <strong>refillPerSec</strong>개씩 채워짐</li>
+        <li>API 호출 전 <code>acquire()</code>로 토큰 1개 소비</li>
+        <li>토큰이 없으면 생길 때까지 <code>delay</code>로 대기</li>
+      </ul>
+    </div>
+
+<pre><code class="language-kotlin">@Component
+class InMemoryRateLimiter(
+    private val capacity: Int = 20,
+    private val refillPerSec: Double = 5.0,
+    private val nowNanos: () -&gt; Long = System::nanoTime
+) : RateLimiter {
+
+    private val mutex = Mutex()
+    private var tokens: Double = capacity.toDouble()
+    private var lastRefillNanos: Long = nowNanos()
+
+    override suspend fun acquire() {
+        while (true) {
+            val waitMillis = mutex.withLock {
+                refill()
+                if (tokens &gt;= 1.0) {
+                    tokens -= 1.0
+                    return
+                }
+                val needed = 1.0 - tokens
+                (needed / refillPerSec * 1_000).toLong().coerceAtLeast(1L)
+            }
+            delay(waitMillis)  // mutex 밖에서 delay (다른 코루틴 진입 허용)
+        }
+    }
+
+    private fun refill() {
+        val now = nowNanos()
+        val elapsed = now - lastRefillNanos
+        if (elapsed &lt;= 0) return
+        val refilled = elapsed.toDouble() / 1_000_000_000.0 * refillPerSec
+        tokens = (tokens + refilled).coerceAtMost(capacity.toDouble())
+        lastRefillNanos = now
+    }
+}</code></pre>
+
+    <div class="box box-warning">
+      <div class="box-title">Mutex 내부에서 delay 금지</div>
+      <p>
+        <code>withLock { ... delay(...) }</code>는 다른 코루틴의 acquire를 블록합니다.
+        이 구현은 lock 안에서 대기 시간만 계산하고, <strong>lock 밖에서 delay</strong>.
+      </p>
+    </div>
+
+    <h2 id="coin-worker"><span class="section-num">4</span> CoinWorker 루프</h2>
+    <p>각 코인마다 하나의 코루틴. 캔들 캐시 + 주기적 체크:</p>
+
+<pre><code class="language-kotlin">suspend fun run() {
+    try {
+        while (currentCoroutineContext().isActive) {
+            runOnce()
+            delay(checkIntervalMillis)
+        }
+    } finally {
+        logger.info("워커 종료: contract={}", contract)
+    }
+}
+
+internal suspend fun runOnce() {
+    try {
+        rateLimiter.acquire()
+        val position = trader.getCurrentPosition(contract)
+        updateCandles()
+        if (position != null) evaluateAndClose(position) else evaluateAndEnter()
+    } catch (e: CancellationException) {
+        throw e  // 취소 신호는 rethrow
+    } catch (e: Exception) {
+        logger.error("워커 iteration 에러", e)  // 다른 에러는 로깅 후 계속
+    }
+}</code></pre>
+
+    <h3>캔들 캐시 — 델타 조회</h3>
+    <p>
+      매 iteration마다 전체 캔들을 받으면 API 부담이 큽니다. 첫 조회만 전체, 이후는 <code>fromSec</code> 파라미터로 델타.
+      캐시 크기 상한(maxCacheSize)을 두어 OOM 방지.
+    </p>
+
+<pre><code class="language-kotlin">internal fun updateCandles() {
+    val lastTs = candleCache.lastOrNull()?.timestamp
+    val fetched = if (lastTs == null) {
+        marketData.getCandles(contract, interval, limit = 100)
+    } else {
+        marketData.getCandles(contract, interval, fromSec = lastTs)
+    }
+    val existingTs = candleCache.mapTo(HashSet()) { it.timestamp }
+    val fresh = fetched.filter { it.timestamp !in existingTs }
+    candleCache.addAll(fresh)
+    trimCache()
+}</code></pre>
+
+    <h2 id="orchestrator"><span class="section-num">5</span> WorkerOrchestrator</h2>
+    <p>
+      BotProperties의 contracts 리스트를 받아 각 코인 워커를 <code>launch</code>.
+      supervisorScope로 감싸 에러를 격리.
+    </p>
+
+<pre><code class="language-kotlin">@Component
+class WorkerOrchestrator(
+    private val botProperties: BotProperties,
+    private val marketData: MarketDataService,
+    private val trader: FuturesTrader,
+    private val rateLimiter: RateLimiter,
+    private val interval: Interval = Interval.MIN_1
+) {
+    fun createWorker(contract: String, strategy: TradingStrategy) = CoinWorker(
+        contract = contract,
+        interval = interval,
+        strategy = strategy,
+        marketData = marketData,
+        trader = trader,
+        rateLimiter = rateLimiter,
+        orderSize = botProperties.orderSize,
+        leverage = botProperties.leverage,
+        checkIntervalMillis = botProperties.checkIntervalSec * 1_000L
+    )
+
+    suspend fun runAll(strategyProvider: (String) -&gt; TradingStrategy) = supervisorScope {
+        botProperties.contracts.forEach { contract -&gt;
+            launch { createWorker(contract, strategyProvider(contract)).run() }
+        }
+    }
+}</code></pre>
+
+    <h2 id="bot-runner"><span class="section-num">6</span> BotRunner: Spring 생명주기 연결</h2>
+    <p>
+      Spring 앱이 완전히 시작된 시점(<code>ApplicationReadyEvent</code>)에 Orchestrator를 구동.
+      앱 종료 시 <code>@PreDestroy</code>로 모든 워커를 정리.
+    </p>
+
+<pre><code class="language-kotlin">@Component
+class BotRunner(
+    private val orchestrator: WorkerOrchestrator,
+    private val strategyFactory: StrategyFactory
+) {
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private var job: Job? = null
+
+    @EventListener(ApplicationReadyEvent::class)
+    fun start() {
+        if (job != null) return
+        job = scope.launch {
+            orchestrator.runAll { contract -&gt; strategyFactory.forContract(contract) }
+        }
+    }
+
+    @PreDestroy
+    fun stop() {
+        val current = job ?: return
+        runBlocking { current.cancelAndJoin() }
+        scope.cancel()
+        job = null
+    }
+}</code></pre>
+
+    <div class="box box-info">
+      <div class="box-title">왜 runBlocking</div>
+      <p>
+        <code>@PreDestroy</code>는 동기 콜백입니다. 여기서 코루틴을 비동기로 cancel하고 바로 리턴하면
+        워커가 완전히 정리되기 전에 Spring이 종료합니다. <code>runBlocking</code>으로 완료까지 블록.
+      </p>
+    </div>
+
+    <h2 id="python-compare"><span class="section-num">7</span> Python asyncio 비교</h2>
+    <table>
+      <thead>
+        <tr><th>개념</th><th>Python</th><th>Kotlin</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>비동기 함수</td>
+          <td><code>async def f(): ...</code></td>
+          <td><code>suspend fun f() { ... }</code></td>
+        </tr>
+        <tr>
+          <td>대기</td>
+          <td><code>await f()</code></td>
+          <td><code>f()</code> (suspend 안에서 자동)</td>
+        </tr>
+        <tr>
+          <td>병렬 실행</td>
+          <td><code>asyncio.gather(*tasks)</code></td>
+          <td><code>tasks.map { async { ... } }.awaitAll()</code></td>
+        </tr>
+        <tr>
+          <td>launch-and-forget</td>
+          <td><code>asyncio.create_task(...)</code></td>
+          <td><code>launch { ... }</code></td>
+        </tr>
+        <tr>
+          <td>취소</td>
+          <td><code>task.cancel()</code></td>
+          <td><code>job.cancel()</code></td>
+        </tr>
+        <tr>
+          <td>스케줄러</td>
+          <td><code>asyncio.get_event_loop()</code></td>
+          <td><code>Dispatchers.IO / Default</code></td>
+        </tr>
+        <tr>
+          <td>에러 격리</td>
+          <td><code>return_exceptions=True</code></td>
+          <td><code>supervisorScope</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-summary">
+      <div class="box-title">전체 정리</div>
+      <p>
+        <strong>BotRunner → Orchestrator(supervisorScope) → CoinWorker(루프) → RateLimiter → FuturesTrader/MarketDataService → GateClient → Gate.io</strong>
+        <br>각 레이어의 책임이 분리되어 있어 개별 테스트가 쉽고, 한 부분의 장애가 전체를 무너뜨리지 않습니다.
+      </p>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="07-step4-auto-exit.html">&larr; 이전: 자동 청산</a>
+      <a href="index.html">인덱스로 &rarr;</a>
+    </nav>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

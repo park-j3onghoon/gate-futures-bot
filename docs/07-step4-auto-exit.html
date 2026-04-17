@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>07 - 자동 청산 | gate-futures-bot 학습 가이드</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>07 - 5단계: 조건부 자동 청산</h1>
+      <p class="subtitle">ExitCondition, PnL 계산(롱/숏 부호 반대), 전체 사이클</p>
+      <span class="badge badge-kotlin">Kotlin 2.1</span>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#why-separate">왜 ExitCondition은 별도 타입인가</a></li>
+        <li><a href="#pnl">PnL 공식: 롱과 숏의 대칭</a></li>
+        <li><a href="#exit-sealed">ExitCondition sealed 계층</a></li>
+        <li><a href="#evaluate">evaluateExit: OR 결합</a></li>
+        <li><a href="#close-api">GateClient.closePosition: close=true</a></li>
+        <li><a href="#worker-cycle">CoinWorker 전체 사이클</a></li>
+      </ol>
+    </div>
+
+    <h2 id="why-separate"><span class="section-num">1</span> 왜 ExitCondition은 별도 타입인가</h2>
+    <p>
+      진입용 <code>EntryCondition</code>과 청산용 <code>ExitCondition</code>은 필드가 비슷하더라도
+      <strong>의미적으로 다른 타입</strong>입니다. 같은 data class로 묶으면 실수로 진입 조건을 청산에 넣을 수 있습니다.
+    </p>
+    <div class="box box-tip">
+      <div class="box-title">타입으로 강제하기</div>
+      <p>
+        <code>TradingStrategy(longEntries: List&lt;EntryCondition&gt;, exitConditions: List&lt;ExitCondition&gt;)</code>처럼
+        파라미터 타입을 다르게 하면 <strong>컴파일 타임에 혼용 방지</strong>.
+        Kotlin의 타입 시스템을 버그 예방에 활용합니다.
+      </p>
+    </div>
+
+    <h2 id="pnl"><span class="section-num">2</span> PnL 공식: 롱과 숏의 대칭</h2>
+    <p>
+      PnL(Profit and Loss)은 명목가(nominal) 기준 수익률입니다. 레버리지는 증거금 배율이지, PnL% 자체는 가격 변동만 반영합니다.
+    </p>
+    <table>
+      <thead>
+        <tr><th>포지션</th><th>PnL 공식</th><th>예: entry=100, current=105</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>롱 (size &gt; 0)</strong></td>
+          <td><code>(current - entry) / entry × 100</code></td>
+          <td>(105-100)/100×100 = <strong>+5%</strong></td>
+        </tr>
+        <tr>
+          <td><strong>숏 (size &lt; 0)</strong></td>
+          <td><code>(entry - current) / entry × 100</code></td>
+          <td>(100-105)/100×100 = <strong>-5%</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+<pre><code class="language-kotlin">internal fun pnlPercent(position: Position, currentPrice: Double): Double {
+    val entry = position.entryPrice.toDoubleOrNull()
+    if (entry == null || entry == 0.0) {
+        logger.warn("비정상 entryPrice: ${position.entryPrice}")
+        return 0.0
+    }
+    return if (position.size &gt; 0) {
+        (currentPrice - entry) / entry * 100.0
+    } else {
+        (entry - currentPrice) / entry * 100.0  // 부호 반대
+    }
+}</code></pre>
+
+    <div class="box box-warning">
+      <div class="box-title">Inverse 계약은 다르다</div>
+      <p>
+        위 공식은 <strong>Linear USDT-margined</strong> 계약(BTC_USDT)용입니다.
+        Inverse 계약(BTC_USD)은 <code>(1/entry - 1/current) × size</code>로 계산이 다릅니다.
+        이 프로젝트는 Linear만 지원.
+      </p>
+    </div>
+
+    <h2 id="exit-sealed"><span class="section-num">3</span> ExitCondition sealed 계층</h2>
+    <p>3가지 서브 타입. 각자 <code>evaluate</code>를 구현:</p>
+
+<pre><code class="language-kotlin">sealed class ExitCondition {
+    abstract fun evaluate(prices: List&lt;Double&gt;, position: Position): Boolean
+
+    data class TakeProfitPct(val pct: Double) : ExitCondition() {
+        override fun evaluate(prices: List&lt;Double&gt;, position: Position): Boolean {
+            val current = prices.lastOrNull() ?: return false
+            return pnlPercent(position, current) &gt;= pct
+        }
+    }
+
+    data class StopLossPct(val pct: Double) : ExitCondition() {
+        override fun evaluate(prices: List&lt;Double&gt;, position: Position): Boolean {
+            val current = prices.lastOrNull() ?: return false
+            return pnlPercent(position, current) &lt;= -pct  // pct는 양수로 전달
+        }
+    }
+
+    data class IndicatorExit(
+        val indicator: Indicator,
+        val operator: ComparisonOp,
+        val value: Double,
+        val period: Int = 14
+    ) : ExitCondition() {
+        // EntryCondition과 동일 로직이지만 의미는 청산
+        override fun evaluate(prices: List&lt;Double&gt;, position: Position): Boolean {
+            // ... RSI/SMA/EMA/PRICE 계산 후 비교
+        }
+    }
+}</code></pre>
+
+    <h2 id="evaluate"><span class="section-num">4</span> evaluateExit: OR 결합</h2>
+    <p>
+      <strong>Entry는 AND</strong>(모든 조건 충족 시 진입), <strong>Exit는 OR</strong>(하나라도 충족 시 청산).
+      <br>이유: 청산은 손실 제한 목적. 한 가지 위험 신호만 있어도 빠져나가는 게 안전.
+    </p>
+
+<pre><code class="language-kotlin">fun evaluateExit(candles: List&lt;Candle&gt;, position: Position): ExitSignal {
+    if (candles.isEmpty() || exitConditions.isEmpty()) return ExitSignal.None
+    val prices = candles.map { it.closePrice }
+    val triggered = exitConditions.filter { it.evaluate(prices, position) }
+    return if (triggered.isNotEmpty()) ExitSignal.Close(triggered) else ExitSignal.None
+}
+
+sealed class ExitSignal {
+    data object None : ExitSignal()
+    data class Close(val triggered: List&lt;ExitCondition&gt;) : ExitSignal()
+}</code></pre>
+
+    <h2 id="close-api"><span class="section-num">5</span> GateClient.closePosition: close=true</h2>
+    <p>
+      Gate.io 선물은 <code>FuturesOrder.close = true</code>와 <code>size = 0</code>으로 전달하면
+      <strong>현재 포지션 전체를 시장가로 청산</strong>합니다. 방향은 서버가 자동 판정.
+    </p>
+
+<pre><code class="language-kotlin">fun closePosition(contract: String): OrderResult {
+    return withRetry("closePosition(contract=$contract)") {
+        try {
+            val order = FuturesOrder().apply {
+                this.contract = contract
+                this.size = 0L
+                this.price = MARKET_PRICE
+                this.tif = FuturesOrder.TifEnum.IOC
+                this.close = true
+            }
+            val result = futuresApi.createFuturesOrder(apiProperties.settle, order, null)
+            OrderResult.from(result)
+        } catch (e: GateApiException) {
+            throw mapGateException(e, "closePosition(contract=$contract)")
+        }
+    }
+}</code></pre>
+
+    <h2 id="worker-cycle"><span class="section-num">6</span> CoinWorker 전체 사이클</h2>
+    <p>한 iteration이 포지션 유무에 따라 분기:</p>
+
+<pre><code class="language-kotlin">internal suspend fun runOnce() {
+    try {
+        rateLimiter.acquire()
+        val position = trader.getCurrentPosition(contract)
+        updateCandles()
+        if (position != null) {
+            evaluateAndClose(position)  // 청산 평가
+        } else {
+            evaluateAndEnter()          // 진입 평가
+        }
+    } catch (e: CancellationException) {
+        throw e  // 코루틴 취소는 그대로 전파
+    } catch (e: Exception) {
+        logger.error("워커 iteration 에러: contract=$contract", e)
+    }
+}</code></pre>
+
+    <div class="mermaid">
+flowchart TD
+    START[runOnce 시작] --> ACQ[rateLimiter.acquire]
+    ACQ --> POS[getCurrentPosition]
+    POS --> UPD[updateCandles]
+    UPD --> CHECK{position 있나?}
+    CHECK -->|yes| EXIT{evaluateExit}
+    CHECK -->|no| ENTRY{evaluateEntry}
+    EXIT -->|Close| CP[closePosition]
+    EXIT -->|None| SLEEP
+    ENTRY -->|Long| OL[openLong]
+    ENTRY -->|Short| OS[openShort]
+    ENTRY -->|None| SLEEP
+    CP --> SLEEP[delay&#40;checkIntervalMillis&#41;]
+    OL --> SLEEP
+    OS --> SLEEP
+    SLEEP --> START
+
+    style CP fill:#ffcdd2,stroke:#c62828,color:#000
+    style OL fill:#c8e6c9,stroke:#388e3c,color:#000
+    style OS fill:#bbdefb,stroke:#1976d2,color:#000
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">5단계 마무리</div>
+      <p>
+        진입 → 청산 사이클이 완성됩니다. 이제 <strong>전략 하나</strong>만 있으면 코인이 자동으로 매매됩니다.
+        다음 가이드(코루틴/워커)에서 이 사이클을 병렬 실행하는 구조를 설명합니다.
+      </p>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="06-step3-auto-entry.html">&larr; 이전: 자동 진입</a>
+      <a href="08-coroutines-workers.html">다음: 코루틴 & 워커 &rarr;</a>
+    </nav>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

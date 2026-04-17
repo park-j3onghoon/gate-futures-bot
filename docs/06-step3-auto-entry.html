@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>06 - 자동 진입 | gate-futures-bot 학습 가이드</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>06 - 4단계: 조건부 자동 진입</h1>
+      <p class="subtitle">EntryCondition, TradingStrategy, 순수 판단 레이어</p>
+      <span class="badge badge-kotlin">Kotlin 2.1</span>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#why">왜 전략을 순수 클래스로 만드나</a></li>
+        <li><a href="#entry-condition">EntryCondition 설계</a></li>
+        <li><a href="#strategy">TradingStrategy.evaluateEntry</a></li>
+        <li><a href="#signal">EntrySignal sealed class</a></li>
+        <li><a href="#external-config">application.yml 외부 설정</a></li>
+        <li><a href="#flow">평가 흐름</a></li>
+      </ol>
+    </div>
+
+    <h2 id="why"><span class="section-num">1</span> 왜 전략을 순수 클래스로 만드나</h2>
+    <p>
+      <code>TradingStrategy</code>는 <strong>Spring 의존 없는 순수 클래스</strong>입니다.
+      <code>@Component</code>도 없고, 다른 Spring Bean을 주입받지 않습니다.
+    </p>
+    <div class="box box-tip">
+      <div class="box-title">이유</div>
+      <ul>
+        <li><strong>테스트 용이</strong>: <code>TradingStrategy(longEntries = ...)</code>로 즉시 생성</li>
+        <li><strong>백테스트 가능</strong>: 동일 클래스를 과거 데이터로 평가</li>
+        <li><strong>파라미터로 데이터 받음</strong>: <code>evaluateEntry(candles)</code> — strategy가 직접 API 호출 금지</li>
+      </ul>
+    </div>
+
+    <h2 id="entry-condition"><span class="section-num">2</span> EntryCondition 설계</h2>
+    <p>진입 조건 하나는 아래 4가지로 표현:</p>
+    <ul>
+      <li><strong>Indicator</strong>: 어떤 지표를 볼 것인가 (RSI/SMA/EMA/PRICE)</li>
+      <li><strong>ComparisonOp</strong>: 어떤 비교 (LT/LTE/GT/GTE)</li>
+      <li><strong>value</strong>: 비교할 임계값</li>
+      <li><strong>period</strong>: 지표의 기간 (기본 14)</li>
+    </ul>
+
+<pre><code class="language-kotlin">enum class Indicator { RSI, SMA, EMA, PRICE }
+enum class ComparisonOp { LT, LTE, GT, GTE }
+
+data class EntryCondition(
+    val indicator: Indicator,
+    val operator: ComparisonOp,
+    val value: Double,
+    val period: Int = 14
+) {
+    init { require(period &gt; 0) { "period must be positive: $period" } }
+
+    fun evaluate(prices: List&lt;Double&gt;): Boolean {
+        val current: Double = when (indicator) {
+            Indicator.RSI -&gt; calculateRsi(prices, period) ?: return false
+            Indicator.SMA -&gt; calculateSma(prices, period) ?: return false
+            Indicator.EMA -&gt; calculateEma(prices, period) ?: return false
+            Indicator.PRICE -&gt; prices.lastOrNull() ?: return false
+        }
+        return when (operator) {
+            ComparisonOp.LT -&gt; current &lt; value
+            ComparisonOp.LTE -&gt; current &lt;= value
+            ComparisonOp.GT -&gt; current &gt; value
+            ComparisonOp.GTE -&gt; current &gt;= value
+        }
+    }
+}</code></pre>
+
+    <div class="box box-info">
+      <div class="box-title">when 식의 exhaustiveness</div>
+      <p>
+        Kotlin <code>when</code>은 enum/sealed class의 모든 분기를 커버하면 <code>else</code>가 필요 없습니다.
+        나중에 Indicator에 값을 추가하면 컴파일 에러로 누락을 알려줍니다 (안전장치).
+      </p>
+    </div>
+
+    <h2 id="strategy"><span class="section-num">3</span> TradingStrategy.evaluateEntry</h2>
+    <p>
+      롱/숏 각각의 조건 리스트를 받습니다. 각 side 내부는 <strong>AND</strong>로 결합 —
+      모든 조건이 충족되어야 시그널 발생.
+    </p>
+
+<pre><code class="language-kotlin">class TradingStrategy(
+    private val longEntries: List&lt;EntryCondition&gt; = emptyList(),
+    private val shortEntries: List&lt;EntryCondition&gt; = emptyList(),
+    private val exitConditions: List&lt;ExitCondition&gt; = emptyList()
+) {
+    fun evaluateEntry(candles: List&lt;Candle&gt;): EntrySignal {
+        if (candles.isEmpty()) return EntrySignal.None
+        val prices = candles.map { it.closePrice }
+
+        if (longEntries.isNotEmpty() && longEntries.all { it.evaluate(prices) }) {
+            return EntrySignal.Long(longEntries)
+        }
+        if (shortEntries.isNotEmpty() && shortEntries.all { it.evaluate(prices) }) {
+            return EntrySignal.Short(shortEntries)
+        }
+        return EntrySignal.None
+    }
+}</code></pre>
+
+    <div class="box box-warning">
+      <div class="box-title">Long 우선</div>
+      <p>
+        둘 다 충족되면 Long이 선택됩니다. 이는 "전략 설계 오류" 신호일 수 있으므로 KDoc에 명시.
+        보통 Long/Short 조건은 상호 배타적으로 설계합니다 (예: RSI&lt;30 vs RSI&gt;70).
+      </p>
+    </div>
+
+    <h2 id="signal"><span class="section-num">4</span> EntrySignal sealed class</h2>
+    <p>
+      반환 타입은 3가지뿐. <strong>sealed class</strong>로 컴파일 타임에 모든 경우를 강제합니다.
+    </p>
+
+<pre><code class="language-kotlin">sealed class EntrySignal {
+    data object None : EntrySignal()
+    data class Long(val matched: List&lt;EntryCondition&gt;) : EntrySignal()
+    data class Short(val matched: List&lt;EntryCondition&gt;) : EntrySignal()
+}</code></pre>
+
+    <p>사용처는 <code>when</code>으로 분기:</p>
+
+<pre><code class="language-kotlin">when (val signal = strategy.evaluateEntry(candles)) {
+    is EntrySignal.Long -&gt; trader.openLong(contract, orderSize, leverage)
+    is EntrySignal.Short -&gt; trader.openShort(contract, orderSize, leverage)
+    EntrySignal.None -&gt; logger.debug("시그널 없음")
+}</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">data object vs object</div>
+      <p>
+        Kotlin 1.9+에서 <code>data object</code>는 자동으로 <code>toString()</code>/<code>equals()</code>/<code>hashCode()</code>를 적절히 구현.
+        <code>object None</code>만 쓰면 기본 Object identity 비교라 로그 가독성이 낮습니다.
+      </p>
+    </div>
+
+    <h2 id="external-config"><span class="section-num">5</span> application.yml 외부 설정</h2>
+    <p>
+      전략을 코드에 하드코딩하지 않고 <code>application.yml</code>에서 주입합니다.
+    </p>
+
+<pre><code class="language-yaml">strategy:
+  contracts:
+    BTC_USDT:
+      long-entries:
+        - indicator: RSI
+          operator: LT
+          value: 30.0
+          period: 14
+      short-entries:
+        - indicator: RSI
+          operator: GT
+          value: 70.0
+          period: 14</code></pre>
+
+    <p><code>@ConfigurationProperties</code>로 바인딩:</p>
+
+<pre><code class="language-kotlin">@ConfigurationProperties(prefix = "strategy")
+data class StrategyProperties(
+    val contracts: Map&lt;String, ContractStrategySpec&gt; = emptyMap()
+)
+
+@Component
+class StrategyFactory(private val properties: StrategyProperties) {
+    fun forContract(contract: String): TradingStrategy {
+        val spec = properties.contracts[contract] ?: return TradingStrategy()
+        return TradingStrategy(
+            longEntries = spec.longEntries.map { it.toEntryCondition() },
+            shortEntries = spec.shortEntries.map { it.toEntryCondition() },
+            exitConditions = spec.exitConditions.map { it.toExitCondition() }
+        )
+    }
+}</code></pre>
+
+    <h2 id="flow"><span class="section-num">6</span> 평가 흐름</h2>
+    <div class="mermaid">
+flowchart TD
+    START[candles 입력] --> EMPTY{candles 비어있나?}
+    EMPTY -->|yes| NONE[EntrySignal.None]
+    EMPTY -->|no| PRICES[prices = candles.map close]
+    PRICES --> LONG{longEntries 모두 충족?}
+    LONG -->|yes| LS[EntrySignal.Long]
+    LONG -->|no| SHORT{shortEntries 모두 충족?}
+    SHORT -->|yes| SS[EntrySignal.Short]
+    SHORT -->|no| NONE
+
+    style NONE fill:#ffcdd2,stroke:#c62828,color:#000
+    style LS fill:#c8e6c9,stroke:#388e3c,color:#000
+    style SS fill:#bbdefb,stroke:#1976d2,color:#000
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">4단계 마무리</div>
+      <p>
+        Strategy는 <strong>순수 판단 레이어</strong>. 데이터 조회는 Worker가, 주문은 Trader가.
+        각 레이어의 책임이 분리되어 각자를 독립적으로 테스트할 수 있습니다.
+      </p>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="05-step2-chart-data.html">&larr; 이전: 차트 데이터</a>
+      <a href="07-step4-auto-exit.html">다음: 자동 청산 &rarr;</a>
+    </nav>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

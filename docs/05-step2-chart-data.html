@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>05 - 차트 데이터 | gate-futures-bot 학습 가이드</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>05 - 3단계: 차트 데이터 + 지표</h1>
+      <p class="subtitle">캔들(OHLCV), SMA/EMA/RSI 순수 함수, null-safe 매핑</p>
+      <span class="badge badge-kotlin">Kotlin 2.1</span>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#candle">캔들(OHLCV)이란</a></li>
+        <li><a href="#model">Candle / Interval 모델</a></li>
+        <li><a href="#fetch">GateClient.getCandlesticks</a></li>
+        <li><a href="#indicators">SMA / EMA / RSI 공식과 구현</a></li>
+        <li><a href="#service">MarketDataService</a></li>
+        <li><a href="#boundaries">경계값 테스트 전략</a></li>
+      </ol>
+    </div>
+
+    <h2 id="candle"><span class="section-num">1</span> 캔들(OHLCV)이란</h2>
+    <p>
+      <strong>캔들스틱(Candlestick)</strong>은 일정 시간 동안의 가격 움직임을 하나의 막대로 요약합니다.
+      5개 값을 담습니다:
+    </p>
+    <table>
+      <thead>
+        <tr><th>기호</th><th>의미</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>O (Open)</strong></td><td>시작 가격</td></tr>
+        <tr><td><strong>H (High)</strong></td><td>최고 가격</td></tr>
+        <tr><td><strong>L (Low)</strong></td><td>최저 가격</td></tr>
+        <tr><td><strong>C (Close)</strong></td><td>종료 가격</td></tr>
+        <tr><td><strong>V (Volume)</strong></td><td>거래량</td></tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">왜 종가(Close)만 쓰나</div>
+      <p>
+        이 프로젝트의 지표(SMA/EMA/RSI)는 <strong>종가</strong>만 사용합니다.
+        다른 지표(볼린저 밴드, 스토캐스틱)는 고/저도 쓰지만 기본 전략엔 불필요.
+      </p>
+    </div>
+
+    <h2 id="model"><span class="section-num">2</span> Candle / Interval 모델</h2>
+    <p>
+      Gate.io SDK의 <code>FuturesCandlestick</code>은 필드가 null 가능(<code>c: String?</code>).
+      우리 도메인 모델에서는 <strong>필수 필드가 null이면 즉시 실패</strong>시켜 silent corruption을 방지합니다.
+    </p>
+
+<pre><code class="language-kotlin">data class Candle(
+    val timestamp: Long,
+    val open: String,
+    val high: String,
+    val low: String,
+    val close: String,
+    val volume: Long
+) {
+    val closePrice: Double get() = close.toDouble()
+
+    companion object {
+        fun from(c: FuturesCandlestick): Candle {
+            val t = c.t ?: throw MarketDataException("timestamp(t) 없음")
+            val close = c.c ?: throw MarketDataException("close(c) 없음")
+            // ... o/h/l 동일
+            return Candle(t.toLong(), open, high, low, close, c.v ?: 0L)
+        }
+    }
+}
+
+enum class Interval(val code: String) {
+    SEC_10("10s"),
+    MIN_1("1m"), MIN_5("5m"), MIN_15("15m"), MIN_30("30m"),
+    HOUR_1("1h"), HOUR_4("4h"), HOUR_8("8h"),
+    DAY_1("1d"), DAY_7("7d"), DAY_30("30d");
+}</code></pre>
+
+    <div class="box box-info">
+      <div class="box-title">왜 가격을 String으로 저장하나</div>
+      <p>
+        Gate.io API가 String으로 반환합니다 (정밀도 유지). Double 변환은 지표 계산 시점에만.
+        금액 비교는 String으로, 계산은 Double로 — 영역을 분리합니다.
+      </p>
+    </div>
+
+    <h2 id="fetch"><span class="section-num">3</span> GateClient.getCandlesticks</h2>
+    <p>
+      Gate.io API는 <code>interval</code>은 필수, <code>limit/from/to</code>는 선택. Kotlin <code>?.let</code>로 optional 체이닝:
+    </p>
+
+<pre><code class="language-kotlin">fun getCandlesticks(
+    contract: String,
+    interval: Interval,
+    limit: Int? = null,
+    fromSec: Long? = null,
+    toSec: Long? = null
+): List&lt;Candle&gt; {
+    return try {
+        val request = futuresApi.listFuturesCandlesticks(apiProperties.settle, contract)
+            .interval(interval.code)
+        limit?.let { request.limit(it) }
+        fromSec?.let { request.from(it) }
+        toSec?.let { request.to(it) }
+
+        val candles = request.execute()
+        candles.map { Candle.from(it) }
+    } catch (e: GateApiException) {
+        throw mapGateException(e, "getCandlesticks(contract=$contract, interval=${interval.code})")
+    }
+}</code></pre>
+
+    <h2 id="indicators"><span class="section-num">4</span> SMA / EMA / RSI 공식과 구현</h2>
+    <p>
+      <strong>Top-level 함수</strong>로 작성합니다. Spring 의존 없는 순수 함수 →
+      어디서나 호출 가능하고 테스트도 쉬움.
+    </p>
+
+    <h3>SMA (Simple Moving Average)</h3>
+    <p><code>SMA = (p₁ + p₂ + ... + pₙ) / n</code> — 최근 n개 가격의 평균.</p>
+
+<pre><code class="language-kotlin">fun calculateSma(prices: List&lt;Double&gt;, period: Int): Double? {
+    require(period &gt; 0) { "period must be positive" }
+    if (prices.size &lt; period) return null
+    return prices.takeLast(period).average()
+}</code></pre>
+
+    <h3>EMA (Exponential Moving Average)</h3>
+    <p>
+      최근 값에 더 큰 가중치. 계산:<br>
+      <code>multiplier = 2 / (period + 1)</code><br>
+      <code>EMA = (current - prev_ema) × multiplier + prev_ema</code>
+    </p>
+
+<pre><code class="language-kotlin">fun calculateEma(prices: List&lt;Double&gt;, period: Int): Double? {
+    require(period &gt; 0)
+    if (prices.size &lt; period) return null
+
+    val multiplier = 2.0 / (period + 1)
+    var ema = prices.take(period).average() // seed: 첫 period의 SMA
+    for (i in period until prices.size) {
+        ema = (prices[i] - ema) * multiplier + ema
+    }
+    return ema
+}</code></pre>
+
+    <h3>RSI (Relative Strength Index)</h3>
+    <p>
+      0~100 범위. 70+ = 과매수(곧 떨어질 가능성), 30- = 과매도(곧 오를 가능성).<br>
+      Wilder's smoothing 공식:
+    </p>
+    <ul>
+      <li>첫 period: gain/loss 단순 평균</li>
+      <li>이후: <code>avg = (prev_avg × (period-1) + current) / period</code></li>
+      <li><code>RS = avgGain / avgLoss</code>, <code>RSI = 100 - 100/(1 + RS)</code></li>
+    </ul>
+
+<pre><code class="language-kotlin">fun calculateRsi(prices: List&lt;Double&gt;, period: Int = 14): Double? {
+    require(period &gt; 0)
+    if (prices.size &lt;= period) return null
+
+    var avgGain = 0.0
+    var avgLoss = 0.0
+    for (i in 1..period) {
+        val change = prices[i] - prices[i - 1]
+        if (change &gt;= 0) avgGain += change else avgLoss -= change
+    }
+    avgGain /= period
+    avgLoss /= period
+
+    for (i in period + 1 until prices.size) {
+        val change = prices[i] - prices[i - 1]
+        avgGain = (avgGain * (period - 1) + max(change, 0.0)) / period
+        avgLoss = (avgLoss * (period - 1) + max(-change, 0.0)) / period
+    }
+
+    // float equality 대신 epsilon 비교
+    val lossIsZero = abs(avgLoss) &lt; 1e-12
+    val gainIsZero = abs(avgGain) &lt; 1e-12
+    if (lossIsZero) return if (gainIsZero) 50.0 else 100.0
+    val rs = avgGain / avgLoss
+    return 100.0 - (100.0 / (1.0 + rs))
+}</code></pre>
+
+    <div class="box box-warning">
+      <div class="box-title">부동소수점 함정</div>
+      <p>
+        <code>avgLoss == 0.0</code>처럼 Double을 직접 비교하면 IEEE 754 누적 오차로 <code>1e-16</code> 같은 미세값을 놓칠 수 있습니다.
+        <strong><code>abs(x) &lt; 1e-12</code></strong> 형태의 epsilon 비교를 씁니다.
+      </p>
+    </div>
+
+    <h2 id="service"><span class="section-num">5</span> MarketDataService</h2>
+    <p>
+      Spring <code>@Service</code>. GateClient를 호출하여 캔들과 최신 가격을 제공. 빈 응답은 예외로:
+    </p>
+
+<pre><code class="language-kotlin">@Service
+class MarketDataService(private val client: GateClient) {
+
+    fun getCandles(
+        contract: String, interval: Interval,
+        limit: Int? = null, fromSec: Long? = null, toSec: Long? = null
+    ): List&lt;Candle&gt; = client.getCandlesticks(contract, interval, limit, fromSec, toSec)
+
+    fun getLatestPrice(contract: String, interval: Interval = Interval.MIN_1): Double {
+        val candles = client.getCandlesticks(contract, interval, limit = 1)
+        val latest = candles.lastOrNull()
+            ?: throw MarketDataException("캔들 없음: $contract")
+        return latest.closePrice
+    }
+}</code></pre>
+
+    <h2 id="boundaries"><span class="section-num">6</span> 경계값 테스트 전략</h2>
+    <p>지표 함수는 경계값에서 버그가 숨어 있습니다. 반드시 아래 케이스를 테스트:</p>
+
+    <table>
+      <thead>
+        <tr><th>케이스</th><th>기대 동작</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>빈 리스트 <code>emptyList()</code></td><td>null</td></tr>
+        <tr><td>period보다 짧은 입력 (1개)</td><td>null</td></tr>
+        <tr><td>period=0 / 음수</td><td><code>IllegalArgumentException</code></td></tr>
+        <tr><td>모든 가격 동일 (평탄)</td><td>RSI=50 (분모 0 방어)</td></tr>
+        <tr><td>모든 가격 상승</td><td>RSI=100</td></tr>
+        <tr><td>모든 가격 하락</td><td>RSI=0</td></tr>
+        <tr><td>공개 레퍼런스 데이터</td><td>70.46 같은 확정값</td></tr>
+      </tbody>
+    </table>
+
+<pre><code class="language-kotlin">@Test
+fun `RSI equals 100 when all prices strictly increase`() {
+    val prices = (1..20).map { it.toDouble() }
+    assertEquals(100.0, calculateRsi(prices, period = 14))
+}
+
+@Test
+fun `RSI returns 50 when no price changes`() {
+    val prices = List(20) { 100.0 }
+    assertEquals(50.0, calculateRsi(prices, period = 14))
+}</code></pre>
+
+    <div class="box box-summary">
+      <div class="box-title">3단계 마무리</div>
+      <p>
+        <strong>Top-level 순수 함수</strong>로 지표를 만들면 Spring 생명주기와 무관하게 테스트/백테스트가 가능합니다.
+        다음 단계(4단계 자동 진입)는 이 지표를 조건 평가에 사용합니다.
+      </p>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="04-step1-buy-sell.html">&larr; 이전: 매수/매도</a>
+      <a href="06-step3-auto-entry.html">다음: 자동 진입 &rarr;</a>
+    </nav>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>

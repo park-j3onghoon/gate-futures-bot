@@ -6,10 +6,10 @@ import com.parkj3onghoon.gatefuturesbot.model.Interval
 import com.parkj3onghoon.gatefuturesbot.model.OrderResult
 import com.parkj3onghoon.gatefuturesbot.model.Position
 import com.parkj3onghoon.gatefuturesbot.ratelimit.RateLimiter
-import com.parkj3onghoon.gatefuturesbot.strategy.ComparisonOp
+import com.parkj3onghoon.gatefuturesbot.market.ComparisonOp
+import com.parkj3onghoon.gatefuturesbot.market.Indicator
 import com.parkj3onghoon.gatefuturesbot.strategy.EntryCondition
 import com.parkj3onghoon.gatefuturesbot.strategy.ExitCondition
-import com.parkj3onghoon.gatefuturesbot.strategy.Indicator
 import com.parkj3onghoon.gatefuturesbot.strategy.TradingStrategy
 import com.parkj3onghoon.gatefuturesbot.trading.FuturesTrader
 import io.mockk.Runs

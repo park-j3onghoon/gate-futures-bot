@@ -1,5 +1,7 @@
 package com.parkj3onghoon.gatefuturesbot.strategy
 
+import com.parkj3onghoon.gatefuturesbot.market.ComparisonOp
+import com.parkj3onghoon.gatefuturesbot.market.Indicator
 import com.parkj3onghoon.gatefuturesbot.model.Candle
 import com.parkj3onghoon.gatefuturesbot.model.Position
 import kotlin.math.abs

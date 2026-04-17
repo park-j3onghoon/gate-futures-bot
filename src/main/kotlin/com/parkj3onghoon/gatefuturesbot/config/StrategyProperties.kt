@@ -1,7 +1,7 @@
 package com.parkj3onghoon.gatefuturesbot.config
 
-import com.parkj3onghoon.gatefuturesbot.strategy.ComparisonOp
-import com.parkj3onghoon.gatefuturesbot.strategy.Indicator
+import com.parkj3onghoon.gatefuturesbot.market.ComparisonOp
+import com.parkj3onghoon.gatefuturesbot.market.Indicator
 import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties(prefix = "strategy")

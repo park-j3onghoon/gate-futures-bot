@@ -5,6 +5,8 @@ import com.parkj3onghoon.gatefuturesbot.config.EntryConditionSpec
 import com.parkj3onghoon.gatefuturesbot.config.ExitConditionSpec
 import com.parkj3onghoon.gatefuturesbot.config.ExitType
 import com.parkj3onghoon.gatefuturesbot.config.StrategyProperties
+import com.parkj3onghoon.gatefuturesbot.market.ComparisonOp
+import com.parkj3onghoon.gatefuturesbot.market.Indicator
 import com.parkj3onghoon.gatefuturesbot.model.Candle
 import com.parkj3onghoon.gatefuturesbot.model.Position
 import org.junit.jupiter.api.Test

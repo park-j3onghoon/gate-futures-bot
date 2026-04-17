@@ -13,8 +13,6 @@ bot:
   leverage: 5
   order-size: 1
   check-interval-sec: 60
-  take-profit-pct: 5.0
-  stop-loss-pct: 3.0
 
 # 전략 설정 (contract별). 설정 없으면 해당 contract는 no-op
 strategy:

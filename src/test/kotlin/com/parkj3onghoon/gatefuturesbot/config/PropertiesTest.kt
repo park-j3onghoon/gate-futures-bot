@@ -35,7 +35,5 @@ class PropertiesTest {
         assertEquals(5, botProperties.leverage)
         assertEquals(1, botProperties.orderSize)
         assertEquals(60L, botProperties.checkIntervalSec)
-        assertEquals(5.0, botProperties.takeProfitPct)
-        assertEquals(3.0, botProperties.stopLossPct)
     }
 }

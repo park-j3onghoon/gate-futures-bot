@@ -22,3 +22,6 @@ bot:
 logging:
   level:
     com.parkj3onghoon.gatefuturesbot: INFO
+  # MDC의 contract 키를 [contract=...] 포맷으로 표시. 워커 로그 추적 용이.
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{36} %replace(- [contract=%X{contract}] ){'- \\[contract=\\] ', '- '} %msg%n"

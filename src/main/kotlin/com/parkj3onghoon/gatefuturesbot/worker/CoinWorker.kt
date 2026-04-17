@@ -14,6 +14,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 
 class CoinWorker(
     val contract: String,
@@ -30,45 +31,45 @@ class CoinWorker(
     private val candleCache: MutableList<Candle> = mutableListOf()
 
     suspend fun run() {
-        logger.info("워커 시작: contract={}, interval={}", contract, interval.code)
+        MDC.put(MDC_KEY_CONTRACT, contract)
+        logger.info("워커 시작: interval={}", interval.code)
         try {
             while (currentCoroutineContext().isActive) {
                 runOnce()
                 delay(config.checkIntervalMillis)
             }
         } finally {
-            logger.info("워커 종료: contract={}", contract)
+            logger.info("워커 종료")
+            MDC.remove(MDC_KEY_CONTRACT)
         }
     }
 
     internal suspend fun runOnce() {
+        // runOnce는 외부(test)에서 직접 호출될 수 있어 MDC 재주입
+        MDC.put(MDC_KEY_CONTRACT, contract)
         try {
             rateLimiter.acquire()
             val position = trader.getCurrentPosition(contract)
             updateCandles()
-            if (position != null) {
-                evaluateAndClose(position)
-            } else {
-                evaluateAndEnter()
-            }
+            if (position != null) evaluateAndClose(position) else evaluateAndEnter()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logger.error("워커 iteration 에러: contract=$contract", e)
+            logger.error("워커 iteration 에러", e)
         }
     }
 
     private fun evaluateAndEnter() {
         when (val signal = strategy.evaluateEntry(candleCache)) {
             is EntrySignal.Long -> {
-                logger.info("롱 진입 시그널: contract={}, conditions={}", contract, signal.matched.size)
+                logger.info("롱 진입 시그널: conditions={}", signal.matched.size)
                 trader.openLong(contract, config.orderSize, config.leverage)
             }
             is EntrySignal.Short -> {
-                logger.info("숏 진입 시그널: contract={}, conditions={}", contract, signal.matched.size)
+                logger.info("숏 진입 시그널: conditions={}", signal.matched.size)
                 trader.openShort(contract, config.orderSize, config.leverage)
             }
-            EntrySignal.None -> logger.debug("진입 시그널 없음: contract={}", contract)
+            EntrySignal.None -> logger.debug("진입 시그널 없음")
         }
     }
 
@@ -76,15 +77,10 @@ class CoinWorker(
         when (val signal = strategy.evaluateExit(candleCache, position)) {
             is ExitSignal.Close -> {
                 val reasons = signal.triggered.joinToString { it::class.simpleName ?: "?" }
-                logger.info(
-                    "청산 시그널: contract={}, size={}, reasons=[{}]",
-                    contract, position.size, reasons
-                )
+                logger.info("청산 시그널: size={}, reasons=[{}]", position.size, reasons)
                 trader.closePosition(contract)
             }
-            ExitSignal.None -> logger.debug(
-                "청산 시그널 없음: contract={}, size={}", contract, position.size
-            )
+            ExitSignal.None -> logger.debug("청산 시그널 없음: size={}", position.size)
         }
     }
 
@@ -100,7 +96,7 @@ class CoinWorker(
         candleCache.addAll(fresh)
         trimCache()
         if (fresh.isNotEmpty()) {
-            logger.debug("캔들 업데이트: contract={}, added={}, total={}", contract, fresh.size, candleCache.size)
+            logger.debug("캔들 업데이트: added={}, total={}", fresh.size, candleCache.size)
         }
     }
 
@@ -110,4 +106,8 @@ class CoinWorker(
     }
 
     internal fun cacheSize(): Int = candleCache.size
+
+    companion object {
+        private const val MDC_KEY_CONTRACT = "contract"
+    }
 }

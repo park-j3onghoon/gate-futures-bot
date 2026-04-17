@@ -271,10 +271,11 @@ class CoinWorkerTest {
         marketData = marketData,
         trader = trader,
         rateLimiter = rateLimiter,
-        orderSize = 1,
-        leverage = 5,
-        checkIntervalMillis = 10,
-        initialCandleLimit = 100
+        config = WorkerConfig(
+            orderSize = 1,
+            leverage = 5,
+            checkIntervalMillis = 10
+        )
     )
 
     private fun candle(ts: Long, close: Double): Candle = Candle(

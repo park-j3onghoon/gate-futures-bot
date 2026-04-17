@@ -30,9 +30,11 @@ class WorkerOrchestrator(
             marketData = marketData,
             trader = trader,
             rateLimiter = rateLimiter,
-            orderSize = botProperties.orderSize,
-            leverage = botProperties.leverage,
-            checkIntervalMillis = botProperties.checkIntervalSec * 1_000L
+            config = WorkerConfig(
+                orderSize = botProperties.orderSize,
+                leverage = botProperties.leverage,
+                checkIntervalMillis = botProperties.checkIntervalSec * 1_000L
+            )
         )
 
     /**

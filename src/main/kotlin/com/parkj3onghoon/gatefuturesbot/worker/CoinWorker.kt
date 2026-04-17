@@ -22,27 +22,19 @@ class CoinWorker(
     private val marketData: MarketDataService,
     private val trader: FuturesTrader,
     private val rateLimiter: RateLimiter,
-    private val orderSize: Int,
-    private val leverage: Int,
-    private val checkIntervalMillis: Long,
-    private val initialCandleLimit: Int = 100,
-    private val maxCacheSize: Int = DEFAULT_MAX_CACHE_SIZE
+    private val config: WorkerConfig
 ) {
 
     private val logger = LoggerFactory.getLogger(CoinWorker::class.java)
     // candleCache는 단일 워커 코루틴에서만 접근된다 (외부 공유 금지)
     private val candleCache: MutableList<Candle> = mutableListOf()
 
-    companion object {
-        const val DEFAULT_MAX_CACHE_SIZE: Int = 1000
-    }
-
     suspend fun run() {
         logger.info("워커 시작: contract={}, interval={}", contract, interval.code)
         try {
             while (currentCoroutineContext().isActive) {
                 runOnce()
-                delay(checkIntervalMillis)
+                delay(config.checkIntervalMillis)
             }
         } finally {
             logger.info("워커 종료: contract={}", contract)
@@ -70,11 +62,11 @@ class CoinWorker(
         when (val signal = strategy.evaluateEntry(candleCache)) {
             is EntrySignal.Long -> {
                 logger.info("롱 진입 시그널: contract={}, conditions={}", contract, signal.matched.size)
-                trader.openLong(contract, orderSize, leverage)
+                trader.openLong(contract, config.orderSize, config.leverage)
             }
             is EntrySignal.Short -> {
                 logger.info("숏 진입 시그널: contract={}, conditions={}", contract, signal.matched.size)
-                trader.openShort(contract, orderSize, leverage)
+                trader.openShort(contract, config.orderSize, config.leverage)
             }
             EntrySignal.None -> logger.debug("진입 시그널 없음: contract={}", contract)
         }
@@ -99,7 +91,7 @@ class CoinWorker(
     internal fun updateCandles() {
         val lastTs = candleCache.lastOrNull()?.timestamp
         val fetched = if (lastTs == null) {
-            marketData.getCandles(contract, interval, limit = initialCandleLimit)
+            marketData.getCandles(contract, interval, limit = config.initialCandleLimit)
         } else {
             marketData.getCandles(contract, interval, fromSec = lastTs)
         }
@@ -113,7 +105,7 @@ class CoinWorker(
     }
 
     private fun trimCache() {
-        val overflow = candleCache.size - maxCacheSize
+        val overflow = candleCache.size - config.maxCacheSize
         if (overflow > 0) candleCache.subList(0, overflow).clear()
     }
 

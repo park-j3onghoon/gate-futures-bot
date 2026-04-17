@@ -28,7 +28,9 @@ class BotRunner(
     private val strategyFactory: StrategyAssembler
 ) {
     private val logger = LoggerFactory.getLogger(BotRunner::class.java)
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    // IO dispatcher: 워커 루프는 대부분 HTTP 대기/delay라 IO 풀이 적합하다.
+    // GateClient의 Thread.sleep도 IO 풀에서 다른 워커에 미치는 영향이 줄어든다.
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var job: Job? = null
 
     @EventListener(ApplicationReadyEvent::class)

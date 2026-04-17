@@ -29,6 +29,7 @@ class GateClient(
     companion object {
         const val MARKET_PRICE = "0"
         private const val DEFAULT_CROSS_LEVERAGE_LIMIT = "0"
+        private const val RATE_LIMIT_RETRY_SLEEP_MS = 1500L
     }
 
     fun createOrder(
@@ -36,66 +37,38 @@ class GateClient(
         size: Long,
         price: String = MARKET_PRICE,
         tif: FuturesOrder.TifEnum = FuturesOrder.TifEnum.IOC
-    ): OrderResult {
-        return withRetry("createOrder(contract=$contract, size=$size)") {
-            try {
-                val order = FuturesOrder().apply {
-                    this.contract = contract
-                    this.size = size
-                    this.price = price
-                    this.tif = tif
-                }
-
-                logger.debug("주문 생성: contract={}, size={}, price={}, tif={}", contract, size, price, tif)
-                val result = futuresApi.createFuturesOrder(apiProperties.settle, order, null)
-                OrderResult.from(result)
-            } catch (e: GateApiException) {
-                throw mapGateException(e, "createOrder(contract=$contract, size=$size)")
-            } catch (e: ApiException) {
-                throw wrapApiException(e, "createOrder(contract=$contract, size=$size)")
-            }
+    ): OrderResult = callApi("createOrder(contract=$contract, size=$size)") {
+        val order = FuturesOrder().apply {
+            this.contract = contract
+            this.size = size
+            this.price = price
+            this.tif = tif
         }
+        logger.debug("주문 생성: contract={}, size={}, price={}, tif={}", contract, size, price, tif)
+        OrderResult.from(futuresApi.createFuturesOrder(apiProperties.settle, order, null))
     }
 
-    fun closePosition(contract: String): OrderResult {
-        return withRetry("closePosition(contract=$contract)") {
-            try {
-                val order = FuturesOrder().apply {
-                    this.contract = contract
-                    this.size = 0L
-                    this.price = MARKET_PRICE
-                    this.tif = FuturesOrder.TifEnum.IOC
-                    this.close = true
-                }
-
-                logger.debug("포지션 청산: contract={}", contract)
-                val result = futuresApi.createFuturesOrder(apiProperties.settle, order, null)
-                OrderResult.from(result)
-            } catch (e: GateApiException) {
-                throw mapGateException(e, "closePosition(contract=$contract)")
-            } catch (e: ApiException) {
-                throw wrapApiException(e, "closePosition(contract=$contract)")
+    fun closePosition(contract: String): OrderResult =
+        callApi("closePosition(contract=$contract)") {
+            val order = FuturesOrder().apply {
+                this.contract = contract
+                this.size = 0L
+                this.price = MARKET_PRICE
+                this.tif = FuturesOrder.TifEnum.IOC
+                this.close = true
             }
+            logger.debug("포지션 청산: contract={}", contract)
+            OrderResult.from(futuresApi.createFuturesOrder(apiProperties.settle, order, null))
         }
-    }
 
-    fun getPosition(contract: String): Position? {
-        return try {
+    fun getPosition(contract: String): Position? =
+        callApi("getPosition(contract=$contract)") {
             val pos = futuresApi.getPosition(apiProperties.settle, contract).execute()
-            if (pos.size == null || pos.size == 0L) {
-                null
-            } else {
-                Position.from(pos)
-            }
-        } catch (e: GateApiException) {
-            throw mapGateException(e, "getPosition(contract=$contract)")
-        } catch (e: ApiException) {
-            throw wrapApiException(e, "getPosition(contract=$contract)")
+            if (pos.size == null || pos.size == 0L) null else Position.from(pos)
         }
-    }
 
     fun updateLeverage(contract: String, leverage: Int) {
-        try {
+        callApi("updateLeverage(contract=$contract, leverage=$leverage)") {
             futuresApi.updatePositionLeverage(
                 apiProperties.settle,
                 contract,
@@ -104,10 +77,6 @@ class GateClient(
                 null
             )
             logger.debug("레버리지 설정: contract={}, leverage={}", contract, leverage)
-        } catch (e: GateApiException) {
-            throw mapGateException(e, "updateLeverage(contract=$contract, leverage=$leverage)")
-        } catch (e: ApiException) {
-            throw wrapApiException(e, "updateLeverage(contract=$contract, leverage=$leverage)")
         }
     }
 
@@ -117,40 +86,48 @@ class GateClient(
         limit: Int? = null,
         fromSec: Long? = null,
         toSec: Long? = null
-    ): List<Candle> {
-        return try {
-            val request = futuresApi.listFuturesCandlesticks(apiProperties.settle, contract)
-                .interval(interval.code)
-            limit?.let { request.limit(it) }
-            fromSec?.let { request.from(it) }
-            toSec?.let { request.to(it) }
+    ): List<Candle> = callApi("getCandlesticks(contract=$contract, interval=${interval.code})") {
+        val request = futuresApi.listFuturesCandlesticks(apiProperties.settle, contract)
+            .interval(interval.code)
+        limit?.let { request.limit(it) }
+        fromSec?.let { request.from(it) }
+        toSec?.let { request.to(it) }
 
-            val candles = request.execute()
-            logger.debug(
-                "캔들 조회: contract={}, interval={}, limit={}, count={}",
-                contract, interval.code, limit, candles.size
-            )
-            candles.map { Candle.from(it) }
+        val candles = request.execute()
+        logger.debug(
+            "캔들 조회: contract={}, interval={}, limit={}, count={}",
+            contract, interval.code, limit, candles.size
+        )
+        candles.map { Candle.from(it) }
+    }
+
+    fun getAccount(): FuturesAccount? = callApi("getAccount()") {
+        futuresApi.listFuturesAccounts(apiProperties.settle)
+    }
+
+    /**
+     * Gate.io API 호출 공통 래퍼.
+     * - GateApiException → 도메인 예외로 매핑
+     * - ApiException → OrderException으로 래핑
+     * - RateLimitException은 한 번 재시도 (write/read 모두 대칭)
+     */
+    private inline fun <T> callApi(context: String, action: () -> T): T = withRetry(context) {
+        try {
+            action()
         } catch (e: GateApiException) {
-            throw mapGateException(
-                e,
-                "getCandlesticks(contract=$contract, interval=${interval.code})"
-            )
+            throw mapGateException(e, context)
         } catch (e: ApiException) {
-            throw wrapApiException(
-                e,
-                "getCandlesticks(contract=$contract, interval=${interval.code})"
-            )
+            throw wrapApiException(e, context)
         }
     }
 
-    fun getAccount(): FuturesAccount? {
+    private inline fun <T> withRetry(context: String, action: () -> T): T {
         return try {
-            futuresApi.listFuturesAccounts(apiProperties.settle)
-        } catch (e: GateApiException) {
-            throw mapGateException(e, "getAccount()")
-        } catch (e: ApiException) {
-            throw wrapApiException(e, "getAccount()")
+            action()
+        } catch (e: RateLimitException) {
+            logger.warn("Rate limit 도달, {}ms 후 재시도: {}", RATE_LIMIT_RETRY_SLEEP_MS, context)
+            Thread.sleep(RATE_LIMIT_RETRY_SLEEP_MS)
+            action()
         }
     }
 
@@ -169,15 +146,5 @@ class GateClient(
 
     private fun wrapApiException(e: ApiException, context: String): OrderException {
         return OrderException("[$context] Gate.io API 호출 실패: ${e.message}", e)
-    }
-
-    private fun <T> withRetry(context: String, action: () -> T): T {
-        return try {
-            action()
-        } catch (e: RateLimitException) {
-            logger.warn("Rate limit 도달, 1.5초 후 재시도: {}", context)
-            Thread.sleep(1500)
-            action()
-        }
     }
 }

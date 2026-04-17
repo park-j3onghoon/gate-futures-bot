@@ -1,6 +1,6 @@
 package com.parkj3onghoon.gatefuturesbot.worker
 
-import com.parkj3onghoon.gatefuturesbot.strategy.StrategyFactory
+import com.parkj3onghoon.gatefuturesbot.bootstrap.StrategyAssembler
 import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,12 +20,12 @@ import org.springframework.stereotype.Component
  *
  * - ApplicationReadyEvent 수신 시 백그라운드 코루틴에서 runAll 실행
  * - 컨텍스트 종료 시 scope를 cancel하여 모든 워커를 정리
- * - contract별 전략은 StrategyFactory가 application.yml 설정에서 생성
+ * - contract별 전략은 StrategyAssembler가 application.yml 설정에서 생성
  */
 @Component
 class BotRunner(
     private val orchestrator: WorkerOrchestrator,
-    private val strategyFactory: StrategyFactory
+    private val strategyFactory: StrategyAssembler
 ) {
     private val logger = LoggerFactory.getLogger(BotRunner::class.java)
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())

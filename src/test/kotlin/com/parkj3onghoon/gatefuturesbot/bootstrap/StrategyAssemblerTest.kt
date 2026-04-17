@@ -1,4 +1,4 @@
-package com.parkj3onghoon.gatefuturesbot.strategy
+package com.parkj3onghoon.gatefuturesbot.bootstrap
 
 import com.parkj3onghoon.gatefuturesbot.config.ContractStrategySpec
 import com.parkj3onghoon.gatefuturesbot.config.EntryConditionSpec
@@ -9,24 +9,26 @@ import com.parkj3onghoon.gatefuturesbot.market.ComparisonOp
 import com.parkj3onghoon.gatefuturesbot.market.Indicator
 import com.parkj3onghoon.gatefuturesbot.model.Candle
 import com.parkj3onghoon.gatefuturesbot.model.Position
+import com.parkj3onghoon.gatefuturesbot.strategy.EntrySignal
+import com.parkj3onghoon.gatefuturesbot.strategy.ExitCondition
+import com.parkj3onghoon.gatefuturesbot.strategy.ExitSignal
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-class StrategyFactoryTest {
+class StrategyAssemblerTest {
 
     @Test
     fun `returns empty strategy for unknown contract`() {
-        val factory = StrategyFactory(StrategyProperties(emptyMap()))
-        val strategy = factory.forContract("BTC_USDT")
-        // 빈 전략 → evaluateEntry는 None
+        val assembler = StrategyAssembler(StrategyProperties(emptyMap()))
+        val strategy = assembler.forContract("BTC_USDT")
         assertEquals(EntrySignal.None, strategy.evaluateEntry(flatCandles()))
     }
 
     @Test
     fun `maps long-entry RSI spec to EntryCondition`() {
-        val factory = StrategyFactory(
+        val assembler = StrategyAssembler(
             StrategyProperties(
                 contracts = mapOf(
                     "BTC_USDT" to ContractStrategySpec(
@@ -37,7 +39,7 @@ class StrategyFactoryTest {
                 )
             )
         )
-        val strategy = factory.forContract("BTC_USDT")
+        val strategy = assembler.forContract("BTC_USDT")
         val falling = (1..20).map { 25.0 - it * 0.5 }
         val candles = falling.mapIndexed { i, c -> candle(1700000000L + i * 60, c) }
         assertIs<EntrySignal.Long>(strategy.evaluateEntry(candles))
@@ -45,7 +47,7 @@ class StrategyFactoryTest {
 
     @Test
     fun `maps TAKE_PROFIT_PCT spec to ExitCondition TakeProfitPct`() {
-        val factory = StrategyFactory(
+        val assembler = StrategyAssembler(
             StrategyProperties(
                 contracts = mapOf(
                     "BTC_USDT" to ContractStrategySpec(
@@ -54,7 +56,7 @@ class StrategyFactoryTest {
                 )
             )
         )
-        val strategy = factory.forContract("BTC_USDT")
+        val strategy = assembler.forContract("BTC_USDT")
         val position = Position("BTC_USDT", 1L, "100", 5, "0", "0")
         val signal = strategy.evaluateExit(listOf(candle(1L, 105.0)), position)
         val close = assertIs<ExitSignal.Close>(signal)
@@ -63,7 +65,7 @@ class StrategyFactoryTest {
 
     @Test
     fun `maps INDICATOR exit spec to IndicatorExit`() {
-        val factory = StrategyFactory(
+        val assembler = StrategyAssembler(
             StrategyProperties(
                 contracts = mapOf(
                     "BTC_USDT" to ContractStrategySpec(
@@ -80,7 +82,7 @@ class StrategyFactoryTest {
                 )
             )
         )
-        val strategy = factory.forContract("BTC_USDT")
+        val strategy = assembler.forContract("BTC_USDT")
         val rising = (1..20).map { 100.0 + it.toDouble() }
         val candles = rising.mapIndexed { i, c -> candle(1700000000L + i * 60, c) }
         val position = Position("BTC_USDT", 1L, "100", 5, "0", "0")
@@ -91,7 +93,7 @@ class StrategyFactoryTest {
 
     @Test
     fun `throws when TAKE_PROFIT_PCT spec missing pct`() {
-        val factory = StrategyFactory(
+        val assembler = StrategyAssembler(
             StrategyProperties(
                 contracts = mapOf(
                     "BTC_USDT" to ContractStrategySpec(
@@ -100,12 +102,12 @@ class StrategyFactoryTest {
                 )
             )
         )
-        assertThrows<IllegalArgumentException> { factory.forContract("BTC_USDT") }
+        assertThrows<IllegalArgumentException> { assembler.forContract("BTC_USDT") }
     }
 
     @Test
     fun `throws when INDICATOR spec missing indicator`() {
-        val factory = StrategyFactory(
+        val assembler = StrategyAssembler(
             StrategyProperties(
                 contracts = mapOf(
                     "BTC_USDT" to ContractStrategySpec(
@@ -116,7 +118,7 @@ class StrategyFactoryTest {
                 )
             )
         )
-        assertThrows<IllegalArgumentException> { factory.forContract("BTC_USDT") }
+        assertThrows<IllegalArgumentException> { assembler.forContract("BTC_USDT") }
     }
 
     private fun flatCandles(): List<Candle> =

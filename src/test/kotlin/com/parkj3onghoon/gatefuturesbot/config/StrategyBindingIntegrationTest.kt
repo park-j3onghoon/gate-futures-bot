@@ -26,11 +26,10 @@ import kotlin.test.assertIs
         "strategy.contracts.BTC_USDT.exit-conditions[1].type=INDICATOR",
         "strategy.contracts.BTC_USDT.exit-conditions[1].indicator=RSI",
         "strategy.contracts.BTC_USDT.exit-conditions[1].operator=GT",
-        "strategy.contracts.BTC_USDT.exit-conditions[1].value=70.0"
-    ]
+        "strategy.contracts.BTC_USDT.exit-conditions[1].value=70.0",
+    ],
 )
 class StrategyBindingIntegrationTest {
-
     @Autowired
     lateinit var properties: StrategyProperties
 
@@ -58,25 +57,30 @@ class StrategyBindingIntegrationTest {
         // 빈 candles 시 EntrySignal.None
         assertEquals(
             com.parkj3onghoon.gatefuturesbot.strategy.EntrySignal.None,
-            strategy.evaluateEntry(emptyList())
+            strategy.evaluateEntry(emptyList()),
         )
 
         // reflection으로 내부 조건 타입 확인 대신, 구조적 동작 확인:
         // TakeProfitPct + IndicatorExit 각각 1개씩 있어야 함
-        val triggered = listOf(
-            ExitCondition.TakeProfitPct(5.0),
-            ExitCondition.IndicatorExit(Indicator.RSI, ComparisonOp.GT, 70.0, 14)
-        )
+        val triggered =
+            listOf(
+                ExitCondition.TakeProfitPct(5.0),
+                ExitCondition.IndicatorExit(Indicator.RSI, ComparisonOp.GT, 70.0, 14),
+            )
         triggered.forEachIndexed { i, expected ->
             assertEquals(
-                expected::class, properties.contracts["BTC_USDT"]!!
-                    .exitConditions[i].toExitCondition()::class
+                expected::class,
+                properties.contracts["BTC_USDT"]!!
+                    .exitConditions[i]
+                    .toExitCondition()::class,
             )
         }
 
         // EntryCondition 1개
-        val entryCondition: EntryCondition = properties.contracts["BTC_USDT"]!!
-            .longEntries[0].toEntryCondition()
+        val entryCondition: EntryCondition =
+            properties.contracts["BTC_USDT"]!!
+                .longEntries[0]
+                .toEntryCondition()
         assertIs<EntryCondition>(entryCondition)
     }
 }

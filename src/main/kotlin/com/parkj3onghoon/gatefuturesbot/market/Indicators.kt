@@ -5,13 +5,19 @@ import kotlin.math.max
 
 private const val FLOAT_EPSILON = 1e-12
 
-fun calculateSma(prices: List<Double>, period: Int): Double? {
+fun calculateSma(
+    prices: List<Double>,
+    period: Int,
+): Double? {
     require(period > 0) { "period must be positive: $period" }
     if (prices.size < period) return null
     return prices.takeLast(period).average()
 }
 
-fun calculateEma(prices: List<Double>, period: Int): Double? {
+fun calculateEma(
+    prices: List<Double>,
+    period: Int,
+): Double? {
     require(period > 0) { "period must be positive: $period" }
     if (prices.size < period) return null
 
@@ -23,7 +29,10 @@ fun calculateEma(prices: List<Double>, period: Int): Double? {
     return ema
 }
 
-fun calculateRsi(prices: List<Double>, period: Int = 14): Double? {
+fun calculateRsi(
+    prices: List<Double>,
+    period: Int = 14,
+): Double? {
     require(period > 0) { "period must be positive: $period" }
     if (prices.size <= period) return null
 

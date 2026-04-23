@@ -16,7 +16,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class FuturesTraderTest {
-
     private lateinit var trader: FuturesTrader
     private lateinit var client: GateClient
 
@@ -28,15 +27,16 @@ class FuturesTraderTest {
 
     @Test
     fun `should open long position successfully`() {
-        val expectedResult = OrderResult(
-            id = 1L,
-            contract = "BTC_USDT",
-            size = 1L,
-            price = "0",
-            status = "finished",
-            fillPrice = "50000",
-            createTime = 1700000000.0
-        )
+        val expectedResult =
+            OrderResult(
+                id = 1L,
+                contract = "BTC_USDT",
+                size = 1L,
+                price = "0",
+                status = "finished",
+                fillPrice = "50000",
+                createTime = 1700000000.0,
+            )
 
         every { client.getPosition("BTC_USDT") } returns null
         every { client.updateLeverage("BTC_USDT", 5) } returns Unit
@@ -63,15 +63,16 @@ class FuturesTraderTest {
 
     @Test
     fun `should open short position successfully`() {
-        val expectedResult = OrderResult(
-            id = 2L,
-            contract = "BTC_USDT",
-            size = -1L,
-            price = "0",
-            status = "finished",
-            fillPrice = "50000",
-            createTime = 1700000000.0
-        )
+        val expectedResult =
+            OrderResult(
+                id = 2L,
+                contract = "BTC_USDT",
+                size = -1L,
+                price = "0",
+                status = "finished",
+                fillPrice = "50000",
+                createTime = 1700000000.0,
+            )
 
         every { client.getPosition("BTC_USDT") } returns null
         every { client.updateLeverage("BTC_USDT", 5) } returns Unit
@@ -98,14 +99,15 @@ class FuturesTraderTest {
 
     @Test
     fun `should throw PositionException when position already exists on long`() {
-        val existingPosition = Position(
-            contract = "BTC_USDT",
-            size = 1L,
-            entryPrice = "50000",
-            leverage = 5,
-            unrealisedPnl = "100.5",
-            realisedPnl = "50.3"
-        )
+        val existingPosition =
+            Position(
+                contract = "BTC_USDT",
+                size = 1L,
+                entryPrice = "50000",
+                leverage = 5,
+                unrealisedPnl = "100.5",
+                realisedPnl = "50.3",
+            )
 
         every { client.getPosition("BTC_USDT") } returns existingPosition
 
@@ -116,14 +118,15 @@ class FuturesTraderTest {
 
     @Test
     fun `should throw PositionException when position already exists on short`() {
-        val existingPosition = Position(
-            contract = "BTC_USDT",
-            size = -1L,
-            entryPrice = "50000",
-            leverage = 5,
-            unrealisedPnl = "-50.0",
-            realisedPnl = "0"
-        )
+        val existingPosition =
+            Position(
+                contract = "BTC_USDT",
+                size = -1L,
+                entryPrice = "50000",
+                leverage = 5,
+                unrealisedPnl = "-50.0",
+                realisedPnl = "0",
+            )
 
         every { client.getPosition("BTC_USDT") } returns existingPosition
 
@@ -143,14 +146,15 @@ class FuturesTraderTest {
 
     @Test
     fun `should return position when position exists`() {
-        val expectedPosition = Position(
-            contract = "BTC_USDT",
-            size = 1L,
-            entryPrice = "50000",
-            leverage = 5,
-            unrealisedPnl = "100.5",
-            realisedPnl = "50.3"
-        )
+        val expectedPosition =
+            Position(
+                contract = "BTC_USDT",
+                size = 1L,
+                entryPrice = "50000",
+                leverage = 5,
+                unrealisedPnl = "100.5",
+                realisedPnl = "50.3",
+            )
 
         every { client.getPosition("BTC_USDT") } returns expectedPosition
 
@@ -163,18 +167,25 @@ class FuturesTraderTest {
 
     @Test
     fun `should close long position successfully`() {
-        val longPosition = Position(
-            contract = "BTC_USDT",
-            size = 2L,
-            entryPrice = "50000",
-            leverage = 5,
-            unrealisedPnl = "100",
-            realisedPnl = "0"
-        )
-        val closeResult = OrderResult(
-            id = 10L, contract = "BTC_USDT", size = 0L, price = "0",
-            status = "finished", fillPrice = "51000", createTime = 1700000000.0
-        )
+        val longPosition =
+            Position(
+                contract = "BTC_USDT",
+                size = 2L,
+                entryPrice = "50000",
+                leverage = 5,
+                unrealisedPnl = "100",
+                realisedPnl = "0",
+            )
+        val closeResult =
+            OrderResult(
+                id = 10L,
+                contract = "BTC_USDT",
+                size = 0L,
+                price = "0",
+                status = "finished",
+                fillPrice = "51000",
+                createTime = 1700000000.0,
+            )
 
         every { client.getPosition("BTC_USDT") } returns longPosition
         every { client.closePosition("BTC_USDT") } returns closeResult
@@ -187,18 +198,25 @@ class FuturesTraderTest {
 
     @Test
     fun `should close short position successfully`() {
-        val shortPosition = Position(
-            contract = "BTC_USDT",
-            size = -2L,
-            entryPrice = "50000",
-            leverage = 5,
-            unrealisedPnl = "100",
-            realisedPnl = "0"
-        )
-        val closeResult = OrderResult(
-            id = 11L, contract = "BTC_USDT", size = 0L, price = "0",
-            status = "finished", fillPrice = "49000", createTime = 1700000000.0
-        )
+        val shortPosition =
+            Position(
+                contract = "BTC_USDT",
+                size = -2L,
+                entryPrice = "50000",
+                leverage = 5,
+                unrealisedPnl = "100",
+                realisedPnl = "0",
+            )
+        val closeResult =
+            OrderResult(
+                id = 11L,
+                contract = "BTC_USDT",
+                size = 0L,
+                price = "0",
+                status = "finished",
+                fillPrice = "49000",
+                createTime = 1700000000.0,
+            )
 
         every { client.getPosition("BTC_USDT") } returns shortPosition
         every { client.closePosition("BTC_USDT") } returns closeResult
@@ -229,14 +247,15 @@ class FuturesTraderTest {
 
     @Test
     fun `should throw PositionException when closeLong on short position`() {
-        val shortPosition = Position(
-            contract = "BTC_USDT",
-            size = -1L,
-            entryPrice = "50000",
-            leverage = 5,
-            unrealisedPnl = "0",
-            realisedPnl = "0"
-        )
+        val shortPosition =
+            Position(
+                contract = "BTC_USDT",
+                size = -1L,
+                entryPrice = "50000",
+                leverage = 5,
+                unrealisedPnl = "0",
+                realisedPnl = "0",
+            )
         every { client.getPosition("BTC_USDT") } returns shortPosition
 
         assertThrows<PositionException> {
@@ -246,14 +265,15 @@ class FuturesTraderTest {
 
     @Test
     fun `should throw PositionException when closeShort on long position`() {
-        val longPosition = Position(
-            contract = "BTC_USDT",
-            size = 1L,
-            entryPrice = "50000",
-            leverage = 5,
-            unrealisedPnl = "0",
-            realisedPnl = "0"
-        )
+        val longPosition =
+            Position(
+                contract = "BTC_USDT",
+                size = 1L,
+                entryPrice = "50000",
+                leverage = 5,
+                unrealisedPnl = "0",
+                realisedPnl = "0",
+            )
         every { client.getPosition("BTC_USDT") } returns longPosition
 
         assertThrows<PositionException> {
@@ -263,18 +283,25 @@ class FuturesTraderTest {
 
     @Test
     fun `closePosition should auto-detect long direction`() {
-        val longPosition = Position(
-            contract = "BTC_USDT",
-            size = 3L,
-            entryPrice = "50000",
-            leverage = 5,
-            unrealisedPnl = "0",
-            realisedPnl = "0"
-        )
-        val closeResult = OrderResult(
-            id = 20L, contract = "BTC_USDT", size = 0L, price = "0",
-            status = "finished", fillPrice = "51000", createTime = 1700000000.0
-        )
+        val longPosition =
+            Position(
+                contract = "BTC_USDT",
+                size = 3L,
+                entryPrice = "50000",
+                leverage = 5,
+                unrealisedPnl = "0",
+                realisedPnl = "0",
+            )
+        val closeResult =
+            OrderResult(
+                id = 20L,
+                contract = "BTC_USDT",
+                size = 0L,
+                price = "0",
+                status = "finished",
+                fillPrice = "51000",
+                createTime = 1700000000.0,
+            )
         every { client.getPosition("BTC_USDT") } returns longPosition
         every { client.closePosition("BTC_USDT") } returns closeResult
 
@@ -286,18 +313,25 @@ class FuturesTraderTest {
 
     @Test
     fun `closePosition should auto-detect short direction`() {
-        val shortPosition = Position(
-            contract = "BTC_USDT",
-            size = -3L,
-            entryPrice = "50000",
-            leverage = 5,
-            unrealisedPnl = "0",
-            realisedPnl = "0"
-        )
-        val closeResult = OrderResult(
-            id = 21L, contract = "BTC_USDT", size = 0L, price = "0",
-            status = "finished", fillPrice = "49000", createTime = 1700000000.0
-        )
+        val shortPosition =
+            Position(
+                contract = "BTC_USDT",
+                size = -3L,
+                entryPrice = "50000",
+                leverage = 5,
+                unrealisedPnl = "0",
+                realisedPnl = "0",
+            )
+        val closeResult =
+            OrderResult(
+                id = 21L,
+                contract = "BTC_USDT",
+                size = 0L,
+                price = "0",
+                status = "finished",
+                fillPrice = "49000",
+                createTime = 1700000000.0,
+            )
         every { client.getPosition("BTC_USDT") } returns shortPosition
         every { client.closePosition("BTC_USDT") } returns closeResult
 

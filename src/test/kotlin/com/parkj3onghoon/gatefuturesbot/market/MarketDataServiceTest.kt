@@ -13,7 +13,6 @@ import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
 
 class MarketDataServiceTest {
-
     private lateinit var service: MarketDataService
     private lateinit var client: GateClient
 
@@ -60,12 +59,16 @@ class MarketDataServiceTest {
         }
     }
 
-    private fun sampleCandle(ts: Long, close: String): Candle = Candle(
-        timestamp = ts,
-        open = close,
-        high = close,
-        low = close,
-        close = close,
-        volume = 0L
-    )
+    private fun sampleCandle(
+        ts: Long,
+        close: String,
+    ): Candle =
+        Candle(
+            timestamp = ts,
+            open = close,
+            high = close,
+            low = close,
+            close = close,
+            volume = 0L,
+        )
 }

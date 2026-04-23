@@ -13,9 +13,8 @@ import org.springframework.stereotype.Component
 class InMemoryRateLimiter(
     private val capacity: Int = DEFAULT_CAPACITY,
     private val refillPerSec: Double = DEFAULT_REFILL_PER_SEC,
-    private val nowNanos: () -> Long = System::nanoTime
+    private val nowNanos: () -> Long = System::nanoTime,
 ) : RateLimiter {
-
     init {
         require(capacity > 0) { "capacity must be positive: $capacity" }
         require(refillPerSec > 0) { "refillPerSec must be positive: $refillPerSec" }
@@ -28,16 +27,17 @@ class InMemoryRateLimiter(
     override suspend fun acquire() {
         while (true) {
             // null = 토큰 획득 성공, non-null = 다음 토큰까지 기다려야 할 밀리초
-            val waitMillis: Long? = mutex.withLock {
-                refill()
-                if (tokens >= 1.0) {
-                    tokens -= 1.0
-                    null
-                } else {
-                    val needed = 1.0 - tokens
-                    (needed / refillPerSec * 1_000).toLong().coerceAtLeast(1L)
+            val waitMillis: Long? =
+                mutex.withLock {
+                    refill()
+                    if (tokens >= 1.0) {
+                        tokens -= 1.0
+                        null
+                    } else {
+                        val needed = 1.0 - tokens
+                        (needed / refillPerSec * 1_000).toLong().coerceAtLeast(1L)
+                    }
                 }
-            }
             if (waitMillis == null) return
             delay(waitMillis)
         }

@@ -4,16 +4,15 @@ import com.parkj3onghoon.gatefuturesbot.market.ComparisonOp
 import com.parkj3onghoon.gatefuturesbot.market.Indicator
 import com.parkj3onghoon.gatefuturesbot.model.Candle
 import com.parkj3onghoon.gatefuturesbot.model.Position
-import kotlin.math.abs
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import kotlin.math.abs
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class TradingStrategyTest {
-
     @Test
     fun `EntryCondition throws on non-positive period`() {
         assertThrows<IllegalArgumentException> {
@@ -55,11 +54,13 @@ class TradingStrategyTest {
     @Test
     fun `evaluateEntry returns Long when all long conditions meet`() {
         val candles = candles((1..20).map { (25 - it * 0.5) })
-        val strategy = TradingStrategy(
-            longEntries = listOf(
-                EntryCondition(Indicator.RSI, ComparisonOp.LT, 30.0, period = 14)
+        val strategy =
+            TradingStrategy(
+                longEntries =
+                    listOf(
+                        EntryCondition(Indicator.RSI, ComparisonOp.LT, 30.0, period = 14),
+                    ),
             )
-        )
         val signal = strategy.evaluateEntry(candles)
         val longSignal = assertIs<EntrySignal.Long>(signal)
         assertEquals(1, longSignal.matched.size)
@@ -68,12 +69,14 @@ class TradingStrategyTest {
     @Test
     fun `evaluateEntry returns None when not all long conditions meet`() {
         val candles = candles((1..20).map { 100.0 })
-        val strategy = TradingStrategy(
-            longEntries = listOf(
-                EntryCondition(Indicator.RSI, ComparisonOp.LT, 30.0, period = 14),
-                EntryCondition(Indicator.PRICE, ComparisonOp.LT, 50.0)
+        val strategy =
+            TradingStrategy(
+                longEntries =
+                    listOf(
+                        EntryCondition(Indicator.RSI, ComparisonOp.LT, 30.0, period = 14),
+                        EntryCondition(Indicator.PRICE, ComparisonOp.LT, 50.0),
+                    ),
             )
-        )
         assertEquals(EntrySignal.None, strategy.evaluateEntry(candles))
     }
 
@@ -81,12 +84,14 @@ class TradingStrategyTest {
     fun `evaluateEntry returns Short when all short conditions meet`() {
         // 꾸준한 상승 → RSI 높음 + PRICE 120 > 115
         val candles = candles((1..20).map { 100.0 + it.toDouble() })
-        val strategy = TradingStrategy(
-            shortEntries = listOf(
-                EntryCondition(Indicator.RSI, ComparisonOp.GT, 70.0, period = 14),
-                EntryCondition(Indicator.PRICE, ComparisonOp.GT, 115.0)
+        val strategy =
+            TradingStrategy(
+                shortEntries =
+                    listOf(
+                        EntryCondition(Indicator.RSI, ComparisonOp.GT, 70.0, period = 14),
+                        EntryCondition(Indicator.PRICE, ComparisonOp.GT, 115.0),
+                    ),
             )
-        )
         val signal = strategy.evaluateEntry(candles)
         assertIs<EntrySignal.Short>(signal)
     }
@@ -95,18 +100,20 @@ class TradingStrategyTest {
     fun `evaluateEntry prefers Long when both long and short conditions trigger`() {
         val candles = candles((1..20).map { 100.0 })
         // long: RSI<=50 (true flat), short: RSI>=50 (true flat)
-        val strategy = TradingStrategy(
-            longEntries = listOf(EntryCondition(Indicator.RSI, ComparisonOp.LTE, 50.0, 14)),
-            shortEntries = listOf(EntryCondition(Indicator.RSI, ComparisonOp.GTE, 50.0, 14))
-        )
+        val strategy =
+            TradingStrategy(
+                longEntries = listOf(EntryCondition(Indicator.RSI, ComparisonOp.LTE, 50.0, 14)),
+                shortEntries = listOf(EntryCondition(Indicator.RSI, ComparisonOp.GTE, 50.0, 14)),
+            )
         assertIs<EntrySignal.Long>(strategy.evaluateEntry(candles))
     }
 
     @Test
     fun `evaluateEntry returns None on empty candles`() {
-        val strategy = TradingStrategy(
-            longEntries = listOf(EntryCondition(Indicator.RSI, ComparisonOp.LT, 30.0))
-        )
+        val strategy =
+            TradingStrategy(
+                longEntries = listOf(EntryCondition(Indicator.RSI, ComparisonOp.LT, 30.0)),
+            )
         assertEquals(EntrySignal.None, strategy.evaluateEntry(emptyList()))
     }
 
@@ -185,12 +192,14 @@ class TradingStrategyTest {
 
     @Test
     fun `evaluateExit returns Close when any condition triggers (OR)`() {
-        val strategy = TradingStrategy(
-            exitConditions = listOf(
-                ExitCondition.TakeProfitPct(5.0),
-                ExitCondition.StopLossPct(3.0)
+        val strategy =
+            TradingStrategy(
+                exitConditions =
+                    listOf(
+                        ExitCondition.TakeProfitPct(5.0),
+                        ExitCondition.StopLossPct(3.0),
+                    ),
             )
-        )
         val position = longPosition(entry = 100.0, size = 1L)
         val candles = candles(listOf(100.0, 106.0))
         val signal = strategy.evaluateExit(candles, position)
@@ -201,12 +210,14 @@ class TradingStrategyTest {
 
     @Test
     fun `evaluateExit returns Close with multiple triggered reasons`() {
-        val strategy = TradingStrategy(
-            exitConditions = listOf(
-                ExitCondition.TakeProfitPct(5.0),
-                ExitCondition.IndicatorExit(Indicator.RSI, ComparisonOp.GT, 50.0, 14)
+        val strategy =
+            TradingStrategy(
+                exitConditions =
+                    listOf(
+                        ExitCondition.TakeProfitPct(5.0),
+                        ExitCondition.IndicatorExit(Indicator.RSI, ComparisonOp.GT, 50.0, 14),
+                    ),
             )
-        )
         val prices = (1..20).map { 100.0 + it.toDouble() }
         val candles = candles(prices)
         val position = longPosition(entry = 100.0, size = 1L)
@@ -215,26 +226,33 @@ class TradingStrategyTest {
         assertEquals(2, close.triggered.size)
     }
 
-    private fun longPosition(entry: Double, size: Long): Position = Position(
-        contract = "BTC_USDT",
-        size = size,
-        entryPrice = entry.toString(),
-        leverage = 5,
-        unrealisedPnl = "0",
-        realisedPnl = "0"
-    )
-
-    private fun shortPosition(entry: Double, size: Long): Position =
-        longPosition(entry, size).copy(size = -abs(size))
-
-    private fun candles(closes: List<Double>): List<Candle> = closes.mapIndexed { i, c ->
-        Candle(
-            timestamp = 1700000000L + i * 60,
-            open = c.toString(),
-            high = c.toString(),
-            low = c.toString(),
-            close = c.toString(),
-            volume = 0L
+    private fun longPosition(
+        entry: Double,
+        size: Long,
+    ): Position =
+        Position(
+            contract = "BTC_USDT",
+            size = size,
+            entryPrice = entry.toString(),
+            leverage = 5,
+            unrealisedPnl = "0",
+            realisedPnl = "0",
         )
-    }
+
+    private fun shortPosition(
+        entry: Double,
+        size: Long,
+    ): Position = longPosition(entry, size).copy(size = -abs(size))
+
+    private fun candles(closes: List<Double>): List<Candle> =
+        closes.mapIndexed { i, c ->
+            Candle(
+                timestamp = 1700000000L + i * 60,
+                open = c.toString(),
+                high = c.toString(),
+                low = c.toString(),
+                close = c.toString(),
+                volume = 0L,
+            )
+        }
 }

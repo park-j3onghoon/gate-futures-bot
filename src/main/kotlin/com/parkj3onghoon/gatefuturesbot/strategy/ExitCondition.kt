@@ -13,14 +13,22 @@ import org.slf4j.LoggerFactory
  * - 여러 조건은 OR로 결합된다 (어느 하나라도 충족 시 청산).
  */
 sealed class ExitCondition {
-    abstract fun evaluate(prices: List<Double>, position: Position): Boolean
+    abstract fun evaluate(
+        prices: List<Double>,
+        position: Position,
+    ): Boolean
 
     /**
      * 롱: (current - entry) / entry * 100 >= pct
      * 숏: (entry - current) / entry * 100 >= pct (부호 반대)
      */
-    data class TakeProfitPct(val pct: Double) : ExitCondition() {
-        override fun evaluate(prices: List<Double>, position: Position): Boolean {
+    data class TakeProfitPct(
+        val pct: Double,
+    ) : ExitCondition() {
+        override fun evaluate(
+            prices: List<Double>,
+            position: Position,
+        ): Boolean {
             val current = prices.lastOrNull() ?: return false
             return pnlPercent(position, current) >= pct
         }
@@ -29,8 +37,13 @@ sealed class ExitCondition {
     /**
      * PnL이 -pct 이하일 때 true (pct는 양수로 전달).
      */
-    data class StopLossPct(val pct: Double) : ExitCondition() {
-        override fun evaluate(prices: List<Double>, position: Position): Boolean {
+    data class StopLossPct(
+        val pct: Double,
+    ) : ExitCondition() {
+        override fun evaluate(
+            prices: List<Double>,
+            position: Position,
+        ): Boolean {
             val current = prices.lastOrNull() ?: return false
             return pnlPercent(position, current) <= -pct
         }
@@ -40,14 +53,16 @@ sealed class ExitCondition {
         val indicator: Indicator,
         val operator: ComparisonOp,
         val value: Double,
-        val period: Int = 14
+        val period: Int = 14,
     ) : ExitCondition() {
         init {
             require(period > 0) { "period must be positive: $period" }
         }
 
-        override fun evaluate(prices: List<Double>, position: Position): Boolean =
-            evaluateIndicator(indicator, operator, value, period, prices)
+        override fun evaluate(
+            prices: List<Double>,
+            position: Position,
+        ): Boolean = evaluateIndicator(indicator, operator, value, period, prices)
     }
 
     companion object {
@@ -61,12 +76,16 @@ sealed class ExitCondition {
          * - 숏: (entry - current) / entry * 100 (부호 반대)
          * - entryPrice 파싱 실패/0이면 0% 반환하고 경고 로그를 남긴다.
          */
-        internal fun pnlPercent(position: Position, currentPrice: Double): Double {
+        internal fun pnlPercent(
+            position: Position,
+            currentPrice: Double,
+        ): Double {
             val entry = position.entryPrice.toDoubleOrNull()
             if (entry == null || entry == 0.0) {
                 logger.warn(
                     "비정상 entryPrice로 PnL 계산 불가: contract={}, entryPrice={}",
-                    position.contract, position.entryPrice
+                    position.contract,
+                    position.entryPrice,
                 )
                 return 0.0
             }
@@ -81,5 +100,8 @@ sealed class ExitCondition {
 
 sealed class ExitSignal {
     data object None : ExitSignal()
-    data class Close(val triggered: List<ExitCondition>) : ExitSignal()
+
+    data class Close(
+        val triggered: List<ExitCondition>,
+    ) : ExitSignal()
 }

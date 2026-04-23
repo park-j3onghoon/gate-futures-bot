@@ -1,6 +1,8 @@
 package com.parkj3onghoon.gatefuturesbot.model
 
-enum class Interval(val code: String) {
+enum class Interval(
+    val code: String,
+) {
     SEC_10("10s"),
     MIN_1("1m"),
     MIN_5("5m"),
@@ -11,5 +13,5 @@ enum class Interval(val code: String) {
     HOUR_8("8h"),
     DAY_1("1d"),
     DAY_7("7d"),
-    DAY_30("30d");
+    DAY_30("30d"),
 }

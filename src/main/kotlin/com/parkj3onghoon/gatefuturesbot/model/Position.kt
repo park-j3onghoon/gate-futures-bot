@@ -10,5 +10,5 @@ data class Position(
     val entryPrice: String,
     val leverage: Int,
     val unrealisedPnl: String,
-    val realisedPnl: String
+    val realisedPnl: String,
 )

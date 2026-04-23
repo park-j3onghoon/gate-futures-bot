@@ -14,7 +14,6 @@ import kotlinx.coroutines.delay
 import org.junit.jupiter.api.Test
 
 class BotRunnerTest {
-
     private fun newRunner(orchestrator: WorkerOrchestrator): BotRunner {
         val assembler = mockk<StrategyAssembler>()
         every { assembler.forContract(any()) } returns TradingStrategy()
@@ -23,7 +22,7 @@ class BotRunnerTest {
             assembler = assembler,
             apiProperties = ApiProperties(host = "https://fx-api-testnet.gateio.ws/api/v4"),
             botProperties = BotProperties(),
-            strategyProperties = StrategyProperties()
+            strategyProperties = StrategyProperties(),
         )
     }
 

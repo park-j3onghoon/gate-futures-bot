@@ -23,10 +23,10 @@ class CoinWorker(
     private val marketData: MarketDataService,
     private val trader: FuturesTrader,
     private val rateLimiter: RateLimiter,
-    private val config: WorkerConfig
+    private val config: WorkerConfig,
 ) {
-
     private val logger = LoggerFactory.getLogger(CoinWorker::class.java)
+
     // candleCache는 단일 워커 코루틴에서만 접근된다 (외부 공유 금지)
     private val candleCache: MutableList<Candle> = mutableListOf()
 
@@ -86,11 +86,12 @@ class CoinWorker(
 
     internal fun updateCandles() {
         val lastTs = candleCache.lastOrNull()?.timestamp
-        val fetched = if (lastTs == null) {
-            marketData.getCandles(contract, interval, limit = config.initialCandleLimit)
-        } else {
-            marketData.getCandles(contract, interval, fromSec = lastTs)
-        }
+        val fetched =
+            if (lastTs == null) {
+                marketData.getCandles(contract, interval, limit = config.initialCandleLimit)
+            } else {
+                marketData.getCandles(contract, interval, fromSec = lastTs)
+            }
         val existingTs = candleCache.mapTo(HashSet()) { it.timestamp }
         val fresh = fetched.filter { it.timestamp !in existingTs }
         candleCache.addAll(fresh)

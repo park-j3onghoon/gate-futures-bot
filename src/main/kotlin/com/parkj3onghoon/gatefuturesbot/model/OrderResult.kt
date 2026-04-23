@@ -11,5 +11,5 @@ data class OrderResult(
     val price: String,
     val status: String,
     val fillPrice: String,
-    val createTime: Double
+    val createTime: Double,
 )

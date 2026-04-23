@@ -17,12 +17,14 @@ class WorkerOrchestrator(
     private val marketData: MarketDataService,
     private val trader: FuturesTrader,
     private val rateLimiter: RateLimiter,
-    private val interval: Interval = Interval.MIN_1
+    private val interval: Interval = Interval.MIN_1,
 ) {
-
     private val logger = LoggerFactory.getLogger(WorkerOrchestrator::class.java)
 
-    fun createWorker(contract: String, strategy: TradingStrategy = TradingStrategy()): CoinWorker =
+    fun createWorker(
+        contract: String,
+        strategy: TradingStrategy = TradingStrategy(),
+    ): CoinWorker =
         CoinWorker(
             contract = contract,
             interval = interval,
@@ -30,11 +32,12 @@ class WorkerOrchestrator(
             marketData = marketData,
             trader = trader,
             rateLimiter = rateLimiter,
-            config = WorkerConfig(
-                orderSize = botProperties.orderSize,
-                leverage = botProperties.leverage,
-                checkIntervalMillis = botProperties.checkIntervalSec * 1_000L
-            )
+            config =
+                WorkerConfig(
+                    orderSize = botProperties.orderSize,
+                    leverage = botProperties.leverage,
+                    checkIntervalMillis = botProperties.checkIntervalSec * 1_000L,
+                ),
         )
 
     /**

@@ -18,14 +18,15 @@ fun evaluateIndicator(
     operator: ComparisonOp,
     value: Double,
     period: Int,
-    prices: List<Double>
+    prices: List<Double>,
 ): Boolean {
-    val current: Double = when (indicator) {
-        Indicator.RSI -> calculateRsi(prices, period) ?: return false
-        Indicator.SMA -> calculateSma(prices, period) ?: return false
-        Indicator.EMA -> calculateEma(prices, period) ?: return false
-        Indicator.PRICE -> prices.lastOrNull() ?: return false
-    }
+    val current: Double =
+        when (indicator) {
+            Indicator.RSI -> calculateRsi(prices, period) ?: return false
+            Indicator.SMA -> calculateSma(prices, period) ?: return false
+            Indicator.EMA -> calculateEma(prices, period) ?: return false
+            Indicator.PRICE -> prices.lastOrNull() ?: return false
+        }
     return when (operator) {
         ComparisonOp.LT -> current < value
         ComparisonOp.LTE -> current <= value

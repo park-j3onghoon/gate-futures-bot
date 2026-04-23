@@ -24,9 +24,8 @@ import io.gate.gateapi.models.Position as SdkPosition
 @Component
 class GateClient(
     private val apiProperties: ApiProperties,
-    internal val futuresApi: FuturesApi
+    internal val futuresApi: FuturesApi,
 ) {
-
     private val logger = LoggerFactory.getLogger(GateClient::class.java)
 
     companion object {
@@ -39,27 +38,30 @@ class GateClient(
         contract: String,
         size: Long,
         price: String = MARKET_PRICE,
-        tif: FuturesOrder.TifEnum = FuturesOrder.TifEnum.IOC
-    ): OrderResult = callApi("createOrder(contract=$contract, size=$size)") {
-        val order = FuturesOrder().apply {
-            this.contract = contract
-            this.size = size
-            this.price = price
-            this.tif = tif
+        tif: FuturesOrder.TifEnum = FuturesOrder.TifEnum.IOC,
+    ): OrderResult =
+        callApi("createOrder(contract=$contract, size=$size)") {
+            val order =
+                FuturesOrder().apply {
+                    this.contract = contract
+                    this.size = size
+                    this.price = price
+                    this.tif = tif
+                }
+            logger.debug("주문 생성: contract={}, size={}, price={}, tif={}", contract, size, price, tif)
+            toOrderResult(futuresApi.createFuturesOrder(apiProperties.settle, order, null))
         }
-        logger.debug("주문 생성: contract={}, size={}, price={}, tif={}", contract, size, price, tif)
-        toOrderResult(futuresApi.createFuturesOrder(apiProperties.settle, order, null))
-    }
 
     fun closePosition(contract: String): OrderResult =
         callApi("closePosition(contract=$contract)") {
-            val order = FuturesOrder().apply {
-                this.contract = contract
-                this.size = 0L
-                this.price = MARKET_PRICE
-                this.tif = FuturesOrder.TifEnum.IOC
-                this.close = true
-            }
+            val order =
+                FuturesOrder().apply {
+                    this.contract = contract
+                    this.size = 0L
+                    this.price = MARKET_PRICE
+                    this.tif = FuturesOrder.TifEnum.IOC
+                    this.close = true
+                }
             logger.debug("포지션 청산: contract={}", contract)
             toOrderResult(futuresApi.createFuturesOrder(apiProperties.settle, order, null))
         }
@@ -70,14 +72,17 @@ class GateClient(
             if (pos.size == null || pos.size == 0L) null else toPosition(pos)
         }
 
-    fun updateLeverage(contract: String, leverage: Int) {
+    fun updateLeverage(
+        contract: String,
+        leverage: Int,
+    ) {
         callApi("updateLeverage(contract=$contract, leverage=$leverage)") {
             futuresApi.updatePositionLeverage(
                 apiProperties.settle,
                 contract,
                 leverage.toString(),
                 DEFAULT_CROSS_LEVERAGE_LIMIT,
-                null
+                null,
             )
             logger.debug("레버리지 설정: contract={}, leverage={}", contract, leverage)
         }
@@ -88,40 +93,48 @@ class GateClient(
         interval: Interval,
         limit: Int? = null,
         fromSec: Long? = null,
-        toSec: Long? = null
-    ): List<Candle> = callApi("getCandlesticks(contract=$contract, interval=${interval.code})") {
-        val request = futuresApi.listFuturesCandlesticks(apiProperties.settle, contract)
-            .interval(interval.code)
-        limit?.let { request.limit(it) }
-        fromSec?.let { request.from(it) }
-        toSec?.let { request.to(it) }
+        toSec: Long? = null,
+    ): List<Candle> =
+        callApi("getCandlesticks(contract=$contract, interval=${interval.code})") {
+            val request =
+                futuresApi
+                    .listFuturesCandlesticks(apiProperties.settle, contract)
+                    .interval(interval.code)
+            limit?.let { request.limit(it) }
+            fromSec?.let { request.from(it) }
+            toSec?.let { request.to(it) }
 
-        val candles = request.execute()
-        logger.debug(
-            "캔들 조회: contract={}, interval={}, limit={}, count={}",
-            contract, interval.code, limit, candles.size
+            val candles = request.execute()
+            logger.debug(
+                "캔들 조회: contract={}, interval={}, limit={}, count={}",
+                contract,
+                interval.code,
+                limit,
+                candles.size,
+            )
+            candles.map { toCandle(it) }
+        }
+
+    private fun toOrderResult(order: FuturesOrder): OrderResult =
+        OrderResult(
+            id = order.id ?: throw OrderException("주문 응답에 id가 없습니다"),
+            contract = order.contract ?: throw OrderException("주문 응답에 contract가 없습니다"),
+            size = order.size ?: throw OrderException("주문 응답에 size가 없습니다"),
+            price = order.price ?: "0",
+            status = order.status?.value ?: "unknown",
+            fillPrice = order.fillPrice ?: "0",
+            createTime = order.createTime ?: 0.0,
         )
-        candles.map { toCandle(it) }
-    }
 
-    private fun toOrderResult(order: FuturesOrder): OrderResult = OrderResult(
-        id = order.id ?: throw OrderException("주문 응답에 id가 없습니다"),
-        contract = order.contract ?: throw OrderException("주문 응답에 contract가 없습니다"),
-        size = order.size ?: throw OrderException("주문 응답에 size가 없습니다"),
-        price = order.price ?: "0",
-        status = order.status?.value ?: "unknown",
-        fillPrice = order.fillPrice ?: "0",
-        createTime = order.createTime ?: 0.0
-    )
-
-    private fun toPosition(pos: SdkPosition): Position = Position(
-        contract = pos.contract ?: "",
-        size = pos.size ?: 0L,
-        entryPrice = pos.entryPrice ?: "0",
-        leverage = pos.leverage?.toIntOrNull() ?: 0,
-        unrealisedPnl = pos.unrealisedPnl ?: "0",
-        realisedPnl = pos.realisedPnl ?: "0"
-    )
+    private fun toPosition(pos: SdkPosition): Position =
+        Position(
+            contract = pos.contract ?: "",
+            size = pos.size ?: 0L,
+            entryPrice = pos.entryPrice ?: "0",
+            leverage = pos.leverage?.toIntOrNull() ?: 0,
+            unrealisedPnl = pos.unrealisedPnl ?: "0",
+            realisedPnl = pos.realisedPnl ?: "0",
+        )
 
     private fun toCandle(c: FuturesCandlestick): Candle {
         val t = c.t ?: throw MarketDataException("캔들 응답에 timestamp(t)가 없습니다")
@@ -131,14 +144,18 @@ class GateClient(
         val low = c.l ?: throw MarketDataException("캔들 응답에 low(l)가 없습니다")
         return Candle(
             timestamp = t.toLong(),
-            open = open, high = high, low = low, close = close,
-            volume = c.v ?: 0L
+            open = open,
+            high = high,
+            low = low,
+            close = close,
+            volume = c.v ?: 0L,
         )
     }
 
-    fun getAccount(): FuturesAccount? = callApi("getAccount()") {
-        futuresApi.listFuturesAccounts(apiProperties.settle)
-    }
+    fun getAccount(): FuturesAccount? =
+        callApi("getAccount()") {
+            futuresApi.listFuturesAccounts(apiProperties.settle)
+        }
 
     /**
      * Gate.io API 호출 공통 래퍼.
@@ -146,27 +163,36 @@ class GateClient(
      * - ApiException → OrderException으로 래핑
      * - RateLimitException은 한 번 재시도 (write/read 모두 대칭)
      */
-    private inline fun <T> callApi(context: String, action: () -> T): T = withRetry(context) {
-        try {
-            action()
-        } catch (e: GateApiException) {
-            throw mapGateException(e, context)
-        } catch (e: ApiException) {
-            throw wrapApiException(e, context)
+    private inline fun <T> callApi(
+        context: String,
+        action: () -> T,
+    ): T =
+        withRetry(context) {
+            try {
+                action()
+            } catch (e: GateApiException) {
+                throw mapGateException(e, context)
+            } catch (e: ApiException) {
+                throw wrapApiException(e, context)
+            }
         }
-    }
 
-    private inline fun <T> withRetry(context: String, action: () -> T): T {
-        return try {
+    private inline fun <T> withRetry(
+        context: String,
+        action: () -> T,
+    ): T =
+        try {
             action()
         } catch (e: RateLimitException) {
             logger.warn("Rate limit 도달, {}ms 후 재시도: {}", RATE_LIMIT_RETRY_SLEEP_MS, context)
             Thread.sleep(RATE_LIMIT_RETRY_SLEEP_MS)
             action()
         }
-    }
 
-    private fun mapGateException(e: GateApiException, context: String): GateFuturesException {
+    private fun mapGateException(
+        e: GateApiException,
+        context: String,
+    ): GateFuturesException {
         val label = e.errorLabel ?: ""
         val message = e.errorMessage ?: e.message ?: "Unknown Gate.io API error"
         logger.warn("Gate.io API 에러: label={}, message={}, context={}", label, message, context)
@@ -179,7 +205,8 @@ class GateClient(
         }
     }
 
-    private fun wrapApiException(e: ApiException, context: String): OrderException {
-        return OrderException("[$context] Gate.io API 호출 실패: ${e.message}", e)
-    }
+    private fun wrapApiException(
+        e: ApiException,
+        context: String,
+    ): OrderException = OrderException("[$context] Gate.io API 호출 실패: ${e.message}", e)
 }

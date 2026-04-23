@@ -11,10 +11,10 @@ import org.springframework.boot.runApplication
 @EnableConfigurationProperties(
     ApiProperties::class,
     BotProperties::class,
-    StrategyProperties::class
+    StrategyProperties::class,
 )
 class GateFuturesBotApplication
 
 fun main(args: Array<String>) {
-	runApplication<GateFuturesBotApplication>(*args)
+    runApplication<GateFuturesBotApplication>(*args)
 }

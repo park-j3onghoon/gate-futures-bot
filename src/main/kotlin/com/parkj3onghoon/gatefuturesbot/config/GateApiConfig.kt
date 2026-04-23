@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Configuration
 
 @Configuration
 class GateApiConfig {
-
     @Bean
     fun futuresApi(apiProperties: ApiProperties): FuturesApi {
         val client = ApiClient()

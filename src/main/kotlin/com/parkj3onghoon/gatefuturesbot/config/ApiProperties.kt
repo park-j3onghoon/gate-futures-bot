@@ -10,7 +10,7 @@ data class ApiProperties(
     val key: String = "",
     val secret: String = "",
     @field:NotBlank val host: String = "https://api.gateio.ws/api/v4",
-    @field:NotBlank val settle: String = "usdt"
+    @field:NotBlank val settle: String = "usdt",
 ) {
     val isTestnet: Boolean get() = host.contains("testnet")
 

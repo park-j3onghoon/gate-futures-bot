@@ -5,8 +5,14 @@ import com.parkj3onghoon.gatefuturesbot.model.Position
 
 sealed class EntrySignal {
     data object None : EntrySignal()
-    data class Long(val matched: List<EntryCondition>) : EntrySignal()
-    data class Short(val matched: List<EntryCondition>) : EntrySignal()
+
+    data class Long(
+        val matched: List<EntryCondition>,
+    ) : EntrySignal()
+
+    data class Short(
+        val matched: List<EntryCondition>,
+    ) : EntrySignal()
 }
 
 /**
@@ -21,7 +27,7 @@ sealed class EntrySignal {
 class TradingStrategy(
     private val longEntries: List<EntryCondition> = emptyList(),
     private val shortEntries: List<EntryCondition> = emptyList(),
-    private val exitConditions: List<ExitCondition> = emptyList()
+    private val exitConditions: List<ExitCondition> = emptyList(),
 ) {
     fun evaluateEntry(candles: List<Candle>): EntrySignal {
         if (candles.isEmpty()) return EntrySignal.None
@@ -36,7 +42,10 @@ class TradingStrategy(
         return EntrySignal.None
     }
 
-    fun evaluateExit(candles: List<Candle>, position: Position): ExitSignal {
+    fun evaluateExit(
+        candles: List<Candle>,
+        position: Position,
+    ): ExitSignal {
         if (candles.isEmpty() || exitConditions.isEmpty()) return ExitSignal.None
         val prices = candles.map { it.closePrice }
         val triggered = exitConditions.filter { it.evaluate(prices, position) }

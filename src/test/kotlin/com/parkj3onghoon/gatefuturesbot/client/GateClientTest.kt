@@ -10,7 +10,6 @@ import io.gate.gateapi.GateApiException
 import io.gate.gateapi.api.FuturesApi
 import io.gate.gateapi.models.FuturesCandlestick
 import io.gate.gateapi.models.FuturesOrder
-import io.gate.gateapi.models.Position as GatePosition
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -21,32 +20,34 @@ import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import io.gate.gateapi.models.Position as GatePosition
 
 class GateClientTest {
-
     private lateinit var client: GateClient
     private lateinit var futuresApi: FuturesApi
 
     @BeforeEach
     fun setUp() {
-        val apiProperties = ApiProperties(
-            key = "test-key",
-            secret = "test-secret",
-            host = "https://api.gateio.ws/api/v4",
-            settle = "usdt"
-        )
+        val apiProperties =
+            ApiProperties(
+                key = "test-key",
+                secret = "test-secret",
+                host = "https://api.gateio.ws/api/v4",
+                settle = "usdt",
+            )
         futuresApi = mockk()
         client = GateClient(apiProperties, futuresApi)
     }
 
     @Test
     fun `should create order successfully`() {
-        val responseOrder = FuturesOrder().apply {
-            contract = "BTC_USDT"
-            size = 1L
-            price = "0"
-            tif = FuturesOrder.TifEnum.IOC
-        }
+        val responseOrder =
+            FuturesOrder().apply {
+                contract = "BTC_USDT"
+                size = 1L
+                price = "0"
+                tif = FuturesOrder.TifEnum.IOC
+            }
         setField(responseOrder, "id", 12345L)
         setField(responseOrder, "status", FuturesOrder.StatusEnum.FINISHED)
         setField(responseOrder, "fillPrice", "50000.5")
@@ -96,12 +97,13 @@ class GateClientTest {
     @Test
     fun `should retry once on RateLimitException and succeed`() {
         val exception = GateApiException("RATE_LIMIT", "Rate limit exceeded", "")
-        val responseOrder = FuturesOrder().apply {
-            contract = "BTC_USDT"
-            size = 1L
-            price = "0"
-            tif = FuturesOrder.TifEnum.IOC
-        }
+        val responseOrder =
+            FuturesOrder().apply {
+                contract = "BTC_USDT"
+                size = 1L
+                price = "0"
+                tif = FuturesOrder.TifEnum.IOC
+            }
         setField(responseOrder, "id", 99L)
         setField(responseOrder, "status", FuturesOrder.StatusEnum.FINISHED)
         setField(responseOrder, "fillPrice", "50000")
@@ -127,9 +129,10 @@ class GateClientTest {
 
     @Test
     fun `should return position when size is non-zero`() {
-        val gatePosition = GatePosition().apply {
-            leverage = "5"
-        }
+        val gatePosition =
+            GatePosition().apply {
+                leverage = "5"
+            }
         setField(gatePosition, "contract", "BTC_USDT")
         setField(gatePosition, "size", 1L)
         setField(gatePosition, "entryPrice", "50000")
@@ -151,9 +154,10 @@ class GateClientTest {
 
     @Test
     fun `should return null when position size is zero`() {
-        val gatePosition = GatePosition().apply {
-            leverage = "5"
-        }
+        val gatePosition =
+            GatePosition().apply {
+                leverage = "5"
+            }
         setField(gatePosition, "contract", "BTC_USDT")
         setField(gatePosition, "size", 0L)
 
@@ -168,12 +172,13 @@ class GateClientTest {
 
     @Test
     fun `should close position with close=true and size=0`() {
-        val responseOrder = FuturesOrder().apply {
-            contract = "BTC_USDT"
-            size = 0L
-            price = "0"
-            tif = FuturesOrder.TifEnum.IOC
-        }
+        val responseOrder =
+            FuturesOrder().apply {
+                contract = "BTC_USDT"
+                size = 0L
+                price = "0"
+                tif = FuturesOrder.TifEnum.IOC
+            }
         setField(responseOrder, "id", 777L)
         setField(responseOrder, "status", FuturesOrder.StatusEnum.FINISHED)
         setField(responseOrder, "fillPrice", "51000")
@@ -196,22 +201,24 @@ class GateClientTest {
 
     @Test
     fun `should fetch candlesticks and map to Candle list`() {
-        val raw1 = FuturesCandlestick().apply {
-            t = 1700000000.0
-            o = "50000"
-            h = "50500"
-            l = "49500"
-            c = "50200"
-            v = 100L
-        }
-        val raw2 = FuturesCandlestick().apply {
-            t = 1700000060.0
-            o = "50200"
-            h = "50800"
-            l = "50100"
-            c = "50600"
-            v = 150L
-        }
+        val raw1 =
+            FuturesCandlestick().apply {
+                t = 1700000000.0
+                o = "50000"
+                h = "50500"
+                l = "49500"
+                c = "50200"
+                v = 100L
+            }
+        val raw2 =
+            FuturesCandlestick().apply {
+                t = 1700000060.0
+                o = "50200"
+                h = "50800"
+                l = "50100"
+                c = "50600"
+                v = 150L
+            }
         val request = mockk<FuturesApi.APIlistFuturesCandlesticksRequest>()
         every { futuresApi.listFuturesCandlesticks("usdt", "BTC_USDT") } returns request
         every { request.interval("1m") } returns request
@@ -258,7 +265,11 @@ class GateClientTest {
         }
     }
 
-    private fun setField(obj: Any, fieldName: String, value: Any) {
+    private fun setField(
+        obj: Any,
+        fieldName: String,
+        value: Any,
+    ) {
         val field = obj.javaClass.getDeclaredField(fieldName)
         field.isAccessible = true
         field.set(obj, value)

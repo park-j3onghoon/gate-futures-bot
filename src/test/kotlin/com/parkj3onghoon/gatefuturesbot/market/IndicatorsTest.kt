@@ -7,7 +7,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class IndicatorsTest {
-
     @Test
     fun `SMA returns average of last period values`() {
         val prices = listOf(1.0, 2.0, 3.0, 4.0, 5.0)
@@ -86,10 +85,24 @@ class IndicatorsTest {
 
     @Test
     fun `RSI computes expected value for known sequence`() {
-        val prices = listOf(
-            44.34, 44.09, 44.15, 43.61, 44.33, 44.83, 45.10, 45.42,
-            45.84, 46.08, 45.89, 46.03, 45.61, 46.28, 46.28
-        )
+        val prices =
+            listOf(
+                44.34,
+                44.09,
+                44.15,
+                43.61,
+                44.33,
+                44.83,
+                45.10,
+                45.42,
+                45.84,
+                46.08,
+                45.89,
+                46.03,
+                45.61,
+                46.28,
+                46.28,
+            )
         val rsi = calculateRsi(prices, period = 14)
         assertNotNull(rsi)
         assertEquals(70.46, Math.round(rsi * 100) / 100.0)

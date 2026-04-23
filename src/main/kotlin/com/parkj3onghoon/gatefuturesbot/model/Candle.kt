@@ -10,7 +10,7 @@ data class Candle(
     val high: String,
     val low: String,
     val close: String,
-    val volume: Long
+    val volume: Long,
 ) {
     val closePrice: Double get() = close.toDouble()
 }

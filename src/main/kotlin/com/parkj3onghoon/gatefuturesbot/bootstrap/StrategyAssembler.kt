@@ -12,8 +12,9 @@ import org.springframework.stereotype.Component
  * - 설정에 없는 contract는 빈 전략(no-op)이 반환된다
  */
 @Component
-class StrategyAssembler(private val properties: StrategyProperties) {
-
+class StrategyAssembler(
+    private val properties: StrategyProperties,
+) {
     private val logger = LoggerFactory.getLogger(StrategyAssembler::class.java)
 
     fun forContract(contract: String): TradingStrategy {
@@ -25,7 +26,7 @@ class StrategyAssembler(private val properties: StrategyProperties) {
         return TradingStrategy(
             longEntries = spec.longEntries.map { it.toEntryCondition() },
             shortEntries = spec.shortEntries.map { it.toEntryCondition() },
-            exitConditions = spec.exitConditions.map { it.toExitCondition() }
+            exitConditions = spec.exitConditions.map { it.toExitCondition() },
         )
     }
 }

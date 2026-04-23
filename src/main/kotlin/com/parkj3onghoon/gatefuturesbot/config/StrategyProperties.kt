@@ -12,20 +12,20 @@ import org.springframework.validation.annotation.Validated
 @Validated
 @ConfigurationProperties(prefix = "strategy")
 data class StrategyProperties(
-    @field:Valid val contracts: Map<String, ContractStrategySpec> = emptyMap()
+    @field:Valid val contracts: Map<String, ContractStrategySpec> = emptyMap(),
 )
 
 data class ContractStrategySpec(
     @field:Valid val longEntries: List<EntryConditionSpec> = emptyList(),
     @field:Valid val shortEntries: List<EntryConditionSpec> = emptyList(),
-    @field:Valid val exitConditions: List<ExitConditionSpec> = emptyList()
+    @field:Valid val exitConditions: List<ExitConditionSpec> = emptyList(),
 )
 
 data class EntryConditionSpec(
     val indicator: Indicator,
     val operator: ComparisonOp,
     val value: Double,
-    @field:Positive val period: Int = 14
+    @field:Positive val period: Int = 14,
 ) {
     fun toEntryCondition(): EntryCondition = EntryCondition(indicator, operator, value, period)
 }
@@ -41,24 +41,27 @@ data class ExitConditionSpec(
     val indicator: Indicator? = null,
     val operator: ComparisonOp? = null,
     val value: Double? = null,
-    val period: Int = 14
+    val period: Int = 14,
 ) {
-    fun toExitCondition(): ExitCondition = when (type) {
-        ExitType.TAKE_PROFIT_PCT -> ExitCondition.TakeProfitPct(requirePct())
-        ExitType.STOP_LOSS_PCT -> ExitCondition.StopLossPct(requirePct())
-        ExitType.INDICATOR -> ExitCondition.IndicatorExit(
-            indicator = require(indicator) { "INDICATOR 청산 조건에 indicator 필드가 필요합니다" },
-            operator = require(operator) { "INDICATOR 청산 조건에 operator 필드가 필요합니다" },
-            value = require(value) { "INDICATOR 청산 조건에 value 필드가 필요합니다" },
-            period = period
-        )
-    }
+    fun toExitCondition(): ExitCondition =
+        when (type) {
+            ExitType.TAKE_PROFIT_PCT -> ExitCondition.TakeProfitPct(requirePct())
+            ExitType.STOP_LOSS_PCT -> ExitCondition.StopLossPct(requirePct())
+            ExitType.INDICATOR ->
+                ExitCondition.IndicatorExit(
+                    indicator = require(indicator) { "INDICATOR 청산 조건에 indicator 필드가 필요합니다" },
+                    operator = require(operator) { "INDICATOR 청산 조건에 operator 필드가 필요합니다" },
+                    value = require(value) { "INDICATOR 청산 조건에 value 필드가 필요합니다" },
+                    period = period,
+                )
+        }
 
-    private fun requirePct(): Double =
-        require(pct) { "${type} 청산 조건에 pct 필드가 필요합니다" }
+    private fun requirePct(): Double = require(pct) { "$type 청산 조건에 pct 필드가 필요합니다" }
 
-    private fun <T : Any> require(value: T?, lazyMessage: () -> String): T =
-        value ?: throw IllegalArgumentException(lazyMessage())
+    private fun <T : Any> require(
+        value: T?,
+        lazyMessage: () -> String,
+    ): T = value ?: throw IllegalArgumentException(lazyMessage())
 }
 
 enum class ExitType { TAKE_PROFIT_PCT, STOP_LOSS_PCT, INDICATOR }

@@ -9,7 +9,7 @@ data class WorkerConfig(
     val leverage: Int,
     val checkIntervalMillis: Long,
     val initialCandleLimit: Int = DEFAULT_INITIAL_CANDLE_LIMIT,
-    val maxCacheSize: Int = DEFAULT_MAX_CACHE_SIZE
+    val maxCacheSize: Int = DEFAULT_MAX_CACHE_SIZE,
 ) {
     init {
         require(orderSize > 0) { "orderSize must be positive: $orderSize" }

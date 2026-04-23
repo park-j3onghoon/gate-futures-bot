@@ -8,7 +8,6 @@ import kotlin.test.assertFalse
 
 @SpringBootTest
 class PropertiesTest {
-
     @Autowired
     lateinit var apiProperties: ApiProperties
 

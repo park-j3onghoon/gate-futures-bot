@@ -11,5 +11,5 @@ data class BotProperties(
     @field:NotEmpty val contracts: List<String> = listOf("BTC_USDT"),
     @field:Positive val leverage: Int = 5,
     @field:Positive val orderSize: Int = 1,
-    @field:Positive val checkIntervalSec: Long = 60
+    @field:Positive val checkIntervalSec: Long = 60,
 )

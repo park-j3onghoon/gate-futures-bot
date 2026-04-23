@@ -6,6 +6,18 @@ gate:
     host: https://api.gateio.ws/api/v4
     settle: usdt
 
+# 이벤트 저장소 (H2 embedded, 파일 기반 영속)
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/events;AUTO_SERVER=TRUE;DATABASE_TO_UPPER=FALSE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+
 # 봇 설정
 bot:
   contracts:

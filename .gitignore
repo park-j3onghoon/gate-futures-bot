@@ -48,3 +48,6 @@ src/main/resources/application-prod.yml
 
 # 기능 수동 생성 산출물
 docs/interview.zip
+
+# H2 이벤트 저장소 파일
+data/

@@ -33,6 +33,9 @@ dependencies {
     // Gate.io SDK
     implementation("io.gate:gate-api:7.1.8")
 
+    // 캐시 (Caffeine — in-memory, 지표 계산 결과 hash 기반 재사용)
+    implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")

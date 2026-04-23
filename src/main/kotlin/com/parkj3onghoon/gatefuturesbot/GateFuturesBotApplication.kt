@@ -7,7 +7,6 @@ import com.parkj3onghoon.gatefuturesbot.risk.RiskProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
-import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories
 
 @SpringBootApplication
 @EnableConfigurationProperties(
@@ -16,7 +15,6 @@ import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories
     StrategyProperties::class,
     RiskProperties::class,
 )
-@EnableJdbcRepositories
 class GateFuturesBotApplication
 
 fun main(args: Array<String>) {

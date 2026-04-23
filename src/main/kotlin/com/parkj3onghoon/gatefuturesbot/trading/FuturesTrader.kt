@@ -1,15 +1,19 @@
 package com.parkj3onghoon.gatefuturesbot.trading
 
-import com.parkj3onghoon.gatefuturesbot.client.GateClient
 import com.parkj3onghoon.gatefuturesbot.exception.PositionException
 import com.parkj3onghoon.gatefuturesbot.model.OrderResult
 import com.parkj3onghoon.gatefuturesbot.model.Position
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
+/**
+ * 주문 실행 서비스.
+ *
+ * ExchangePort에만 의존 — 실제 거래소는 알 필요 없음 (Hexagonal).
+ */
 @Service
 class FuturesTrader(
-    private val client: GateClient,
+    private val exchange: ExchangePort,
 ) {
     private val logger = LoggerFactory.getLogger(FuturesTrader::class.java)
 
@@ -25,7 +29,7 @@ class FuturesTrader(
         leverage: Int = 5,
     ): OrderResult = openPosition(contract, -size.toLong(), leverage, "숏")
 
-    fun getCurrentPosition(contract: String): Position? = client.getPosition(contract)
+    fun getCurrentPosition(contract: String): Position? = exchange.getPosition(contract)
 
     fun closeLong(contract: String): OrderResult {
         val position = requirePosition(contract)
@@ -54,7 +58,7 @@ class FuturesTrader(
     }
 
     private fun requirePosition(contract: String): Position =
-        client.getPosition(contract)
+        exchange.getPosition(contract)
             ?: throw PositionException("청산할 포지션이 없습니다: contract=$contract")
 
     private fun closeExistingPosition(
@@ -69,7 +73,7 @@ class FuturesTrader(
             position.size,
             position.entryPrice,
         )
-        return client.closePosition(contract)
+        return exchange.closePosition(contract)
     }
 
     private fun openPosition(
@@ -78,7 +82,7 @@ class FuturesTrader(
         leverage: Int,
         direction: String,
     ): OrderResult {
-        val currentPosition = client.getPosition(contract)
+        val currentPosition = exchange.getPosition(contract)
         if (currentPosition != null) {
             throw PositionException(
                 "이미 포지션이 존재합니다: contract=$contract, 기존size=${currentPosition.size}, " +
@@ -86,8 +90,7 @@ class FuturesTrader(
             )
         }
 
-        client.updateLeverage(contract, leverage)
         logger.info("{} 포지션 진입: contract={}, size={}, leverage={}", direction, contract, size, leverage)
-        return client.createOrder(contract, size)
+        return exchange.createOrder(contract, size, leverage)
     }
 }

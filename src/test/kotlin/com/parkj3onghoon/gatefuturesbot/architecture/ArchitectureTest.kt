@@ -150,4 +150,20 @@ class ArchitectureTest {
             ).because("RateLimiter는 독립 유틸. 다른 레이어에 의존 금지")
             .check(importedClasses)
     }
+
+    @Test
+    fun `trading market worker depend on ExchangePort not client directly`() {
+        noClasses()
+            .that()
+            .resideInAnyPackage("..trading..", "..market..", "..worker..")
+            .and()
+            .haveSimpleNameNotEndingWith("Adapter")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("..client..")
+            .because(
+                "Hexagonal: 도메인은 ExchangePort(trading 내 interface)에만 의존. " +
+                    "client는 Adapter에 대해서만 참조 가능.",
+            ).check(importedClasses)
+    }
 }

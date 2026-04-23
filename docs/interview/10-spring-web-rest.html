@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>10 - REST API | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .code-py::before { content: "DRF (Django REST)"; display: block; padding: 6px 12px; background: #10b981; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .code-kt::before { content: "Spring Web"; display: block; padding: 6px 12px; background: #3b82f6; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .side-by-side pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-anti { border-left: 4px solid #ef4444; background: #fef2f2; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .box-anti .box-title { color: #dc2626; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+
+    .layered {
+      padding: 20px; background: #f9fafb; border-radius: 12px; margin: 20px 0;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .layer {
+      padding: 12px 18px; border-radius: 8px; color: white; font-size: 14px;
+      font-family: monospace; display: flex; justify-content: space-between;
+    }
+    .l-controller { background: #3b82f6; }
+    .l-dto { background: #06b6d4; }
+    .l-service { background: #10b981; }
+    .l-domain { background: #f59e0b; }
+    .l-repository { background: #ef4444; }
+    .l-db { background: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>10 - REST API (Spring Web MVC)</h1>
+      <p class="subtitle">DRF 개발자를 위한 Spring Web + 실무 패턴</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#concept">DRF와 Spring Web 매핑</a></li>
+        <li><a href="#controller">@RestController 기본</a></li>
+        <li><a href="#mapping">URL 매핑 어노테이션</a></li>
+        <li><a href="#request">요청 데이터 바인딩</a></li>
+        <li><a href="#dto">DTO 패턴 (Kotlin data class)</a></li>
+        <li><a href="#validation">Validation</a></li>
+        <li><a href="#response">응답 처리 (ResponseEntity)</a></li>
+        <li><a href="#exception">전역 예외 처리</a></li>
+        <li><a href="#layered">계층 아키텍처</a></li>
+        <li><a href="#i18n">i18n (글로벌 서비스)</a></li>
+        <li><a href="#openapi">OpenAPI / Swagger</a></li>
+        <li><a href="#webflux">WebFlux vs MVC</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="concept"><span class="section-num">1</span> DRF와 Spring Web 매핑</h2>
+    <table>
+      <thead><tr><th>DRF</th><th>Spring Web</th><th>비고</th></tr></thead>
+      <tbody>
+        <tr><td><code>ViewSet</code>, <code>APIView</code></td><td><code>@RestController</code></td><td>클래스 단위 라우팅</td></tr>
+        <tr><td><code>urls.py</code> 라우팅</td><td><code>@RequestMapping</code> / <code>@GetMapping</code></td><td>메서드에 직접 붙임</td></tr>
+        <tr><td><code>serializers.Serializer</code></td><td>DTO class + Jackson</td><td>수동 직렬화 X — 자동 변환</td></tr>
+        <tr><td><code>Serializer.is_valid()</code></td><td><code>@Valid</code> + <code>BindingResult</code></td><td>jakarta.validation</td></tr>
+        <tr><td><code>Response(data)</code></td><td><code>ResponseEntity.ok(data)</code></td><td>상태코드 + 헤더 제어</td></tr>
+        <tr><td><code>exception_handler</code></td><td><code>@ControllerAdvice</code> + <code>@ExceptionHandler</code></td><td>전역 예외</td></tr>
+        <tr><td><code>permission_classes</code></td><td>Spring Security + <code>@PreAuthorize</code></td><td>12장 참고</td></tr>
+        <tr><td><code>throttle_classes</code></td><td>Bucket4j / Resilience4j</td><td>별도 라이브러리</td></tr>
+        <tr><td><code>drf-spectacular</code></td><td>springdoc-openapi</td><td>자동 문서화</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="controller"><span class="section-num">2</span> @RestController 기본</h2>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># DRF
+from rest_framework.viewsets import ViewSet
+from rest_framework.response import Response
+
+class UserViewSet(ViewSet):
+    def list(self, request):
+        users = User.objects.all()
+        data = UserSerializer(users, many=True).data
+        return Response(data)
+
+    def retrieve(self, request, pk):
+        user = User.objects.get(pk=pk)
+        return Response(UserSerializer(user).data)
+
+    def create(self, request):
+        s = UserSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        s.save()
+        return Response(s.data, status=201)
+
+# urls.py
+router.register(r'users', UserViewSet)</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">@RestController
+@RequestMapping("/api/v1/users")
+class UserController(
+    private val userService: UserService
+) {
+    @GetMapping
+    fun list(): List&lt;UserResponse&gt; =
+        userService.findAll().map(UserResponse::from)
+
+    @GetMapping("/{id}")
+    fun get(@PathVariable id: Long): UserResponse =
+        UserResponse.from(userService.findById(id))
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    fun create(@Valid @RequestBody req: CreateUserRequest): UserResponse {
+        val created = userService.create(req.toCommand())
+        return UserResponse.from(created)
+    }
+
+    @PatchMapping("/{id}")
+    fun update(
+        @PathVariable id: Long,
+        @Valid @RequestBody req: UpdateUserRequest
+    ): UserResponse = UserResponse.from(userService.update(id, req))
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun delete(@PathVariable id: Long) = userService.delete(id)
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">@RestController vs @Controller</div>
+      <p>
+        <code>@RestController</code> = <code>@Controller</code> + <code>@ResponseBody</code>.
+        리턴값을 자동으로 JSON/XML로 직렬화해 HTTP 응답 body에 담습니다.
+        <code>@Controller</code>는 뷰 이름을 리턴(Thymeleaf 같은 템플릿 렌더링용).
+        REST API는 무조건 <code>@RestController</code>.
+      </p>
+    </div>
+
+    <h2 id="mapping"><span class="section-num">3</span> URL 매핑 어노테이션</h2>
+
+<pre><code class="language-kotlin">// 클래스 레벨 기본 경로
+@RestController
+@RequestMapping("/api/v1/orders")
+class OrderController {
+
+    // 메서드별 HTTP 메서드
+    @GetMapping                    // GET /api/v1/orders
+    fun list() { }
+
+    @GetMapping("/{id}")            // GET /api/v1/orders/123
+    fun get(@PathVariable id: Long) { }
+
+    @PostMapping                    // POST /api/v1/orders
+    fun create() { }
+
+    @PutMapping("/{id}")            // PUT /api/v1/orders/123 (전체 수정)
+    fun replace() { }
+
+    @PatchMapping("/{id}")          // PATCH (부분 수정)
+    fun update() { }
+
+    @DeleteMapping("/{id}")
+    fun delete() { }
+
+    // 여러 메서드 허용
+    @RequestMapping(
+        value = ["/search"],
+        method = [RequestMethod.GET, RequestMethod.POST]
+    )
+    fun search() { }
+
+    // Content-Type 기반 분기
+    @PostMapping(consumes = [MediaType.APPLICATION_JSON_VALUE])
+    fun createJson() { }
+
+    @PostMapping(consumes = [MediaType.APPLICATION_XML_VALUE])
+    fun createXml() { }
+}</code></pre>
+
+    <h3>경로 변수 패턴</h3>
+<pre><code class="language-kotlin">@GetMapping("/{category}/{id:[0-9]+}")  // 정규식 제약
+fun get(
+    @PathVariable category: String,
+    @PathVariable id: Long
+) { }
+
+// 선택적 경로
+@GetMapping("/orders/{id}", "/orders/{id}/detail")
+fun get(@PathVariable id: Long) { }</code></pre>
+
+    <h2 id="request"><span class="section-num">4</span> 요청 데이터 바인딩</h2>
+
+    <h3>@PathVariable — URL 경로 값</h3>
+<pre><code class="language-kotlin">@GetMapping("/users/{id}")
+fun get(@PathVariable id: Long): UserResponse = ...
+// /users/42 → id = 42
+// id가 Long이 아닌 문자열이면 400 자동 응답</code></pre>
+
+    <h3>@RequestParam — 쿼리/폼 파라미터</h3>
+<pre><code class="language-kotlin">@GetMapping("/users")
+fun search(
+    @RequestParam(required = false, defaultValue = "0") page: Int,
+    @RequestParam(required = false, defaultValue = "20") size: Int,
+    @RequestParam(required = false) q: String?,
+    @RequestParam(name = "sort") sortBy: String = "id"
+): List&lt;UserResponse&gt; = ...
+// GET /users?page=1&size=50&q=teddy&sort=name</code></pre>
+
+    <h3>@RequestBody — 요청 본문(JSON 등)</h3>
+<pre><code class="language-kotlin">data class CreateUserRequest(
+    val name: String,
+    val email: String,
+    val age: Int?
+)
+
+@PostMapping("/users")
+fun create(@RequestBody req: CreateUserRequest): UserResponse = ...
+
+// 요청:
+// POST /users
+// Content-Type: application/json
+// { "name": "Teddy", "email": "t@x.com", "age": 30 }
+
+// Jackson이 자동으로 JSON → CreateUserRequest 변환</code></pre>
+
+    <h3>@RequestHeader / @CookieValue</h3>
+<pre><code class="language-kotlin">@GetMapping("/me")
+fun me(
+    @RequestHeader("Authorization") authHeader: String,
+    @RequestHeader("X-Request-Id", required = false) requestId: String?,
+    @CookieValue("session") session: String
+) = ...</code></pre>
+
+    <h3>ModelAttribute (폼 바인딩)</h3>
+<pre><code class="language-kotlin">@GetMapping("/search")
+fun search(@ModelAttribute filter: SearchFilter): Page&lt;Result&gt; = ...
+// 쿼리 파라미터를 data class에 바인딩 (여러 @RequestParam 대체)
+
+data class SearchFilter(
+    val keyword: String? = null,
+    val category: String? = null,
+    val page: Int = 0,
+    val size: Int = 20
+)</code></pre>
+
+    <h2 id="dto"><span class="section-num">5</span> DTO 패턴</h2>
+    <p>
+      DRF의 Serializer가 "모델 ↔ JSON" 변환을 담당한다면, Spring은 <strong>data class를 DTO로</strong> 사용하고 Jackson이 자동 변환합니다.
+      <strong>Entity를 직접 노출하지 말고 DTO를 쓰는 것이 정석</strong>.
+    </p>
+
+<pre><code class="language-kotlin">// 요청 DTO
+data class CreateOrderRequest(
+    @field:NotBlank val productId: String,
+    @field:Positive val quantity: Int,
+    @field:Email val customerEmail: String
+) {
+    fun toCommand() = CreateOrderCommand(
+        productId = productId,
+        quantity = quantity,
+        customerEmail = customerEmail
+    )
+}
+
+// 응답 DTO
+data class OrderResponse(
+    val id: Long,
+    val productId: String,
+    val quantity: Int,
+    val status: String,
+    val createdAt: LocalDateTime
+) {
+    companion object {
+        fun from(order: Order) = OrderResponse(
+            id = order.id,
+            productId = order.productId,
+            quantity = order.quantity,
+            status = order.status.name,
+            createdAt = order.createdAt
+        )
+    }
+}</code></pre>
+
+    <div class="box-anti">
+      <div class="box-title">Entity를 직접 응답으로 주지 마세요</div>
+<pre><code class="language-kotlin">// ❌ 위험
+@GetMapping("/users/{id}")
+fun get(@PathVariable id: Long): User {  // Entity 직접 반환
+    return userRepo.findById(id).get()
+}
+
+// 문제:
+// - 비밀번호, 토큰 등 내부 필드 노출
+// - Lazy 프록시 접근시 추가 쿼리 발생 (N+1)
+// - API 스키마가 DB 스키마에 커플링 → 변경 불가능
+// - 순환 참조(ManyToMany)에서 무한 직렬화
+
+// ✅ DTO로 변환
+@GetMapping("/users/{id}")
+fun get(@PathVariable id: Long): UserResponse =
+    UserResponse.from(userRepo.findById(id).orElseThrow())</code></pre>
+    </div>
+
+    <h3>Jackson 커스터마이즈</h3>
+<pre><code class="language-kotlin">data class OrderResponse(
+    val id: Long,
+
+    @JsonProperty("product_id")  // snake_case 변환
+    val productId: String,
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Seoul")
+    val createdAt: LocalDateTime,
+
+    @JsonIgnore                    // 응답에서 제외
+    val internalNote: String,
+
+    @field:JsonInclude(JsonInclude.Include.NON_NULL)  // null이면 응답에서 제외
+    val optionalField: String?
+)
+
+// 전역 설정: 모든 필드 snake_case
+@Configuration
+class JacksonConfig {
+    @Bean
+    fun objectMapper(): ObjectMapper = jacksonObjectMapper().apply {
+        propertyNamingStrategy = PropertyNamingStrategies.SNAKE_CASE
+        registerModule(JavaTimeModule())
+        disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+    }
+}</code></pre>
+
+    <h2 id="validation"><span class="section-num">6</span> Validation</h2>
+    <p>jakarta.validation 어노테이션 + <code>@Valid</code>로 자동 검증. 실패시 <code>MethodArgumentNotValidException</code>.</p>
+
+<pre><code class="language-kotlin">data class CreateUserRequest(
+    @field:NotBlank(message = "이름은 필수입니다")
+    @field:Size(min = 2, max = 30)
+    val name: String,
+
+    @field:NotBlank
+    @field:Email(message = "유효한 이메일이 아닙니다")
+    val email: String,
+
+    @field:Positive
+    @field:Max(120)
+    val age: Int,
+
+    @field:Pattern(regexp = "^[A-Z]{2}$", message = "국가 코드는 2자리 대문자")
+    val countryCode: String,
+
+    @field:Valid   // 중첩 검증
+    val address: AddressRequest
+)
+
+data class AddressRequest(
+    @field:NotBlank val street: String,
+    @field:NotBlank val city: String
+)
+
+@PostMapping("/users")
+fun create(@Valid @RequestBody req: CreateUserRequest): UserResponse = ...</code></pre>
+
+    <h3>주요 검증 어노테이션</h3>
+    <table>
+      <thead><tr><th>어노테이션</th><th>의미</th></tr></thead>
+      <tbody>
+        <tr><td><code>@NotNull</code></td><td>null 금지</td></tr>
+        <tr><td><code>@NotBlank</code></td><td>null/빈 문자열/공백만 금지 (String)</td></tr>
+        <tr><td><code>@NotEmpty</code></td><td>null/빈 컬렉션 금지</td></tr>
+        <tr><td><code>@Size(min, max)</code></td><td>문자열/컬렉션 크기 범위</td></tr>
+        <tr><td><code>@Min/@Max</code></td><td>숫자 범위</td></tr>
+        <tr><td><code>@Positive/@Negative</code></td><td>양수/음수</td></tr>
+        <tr><td><code>@Email</code></td><td>이메일 형식</td></tr>
+        <tr><td><code>@Pattern(regexp)</code></td><td>정규식</td></tr>
+        <tr><td><code>@Past/@Future</code></td><td>날짜 (LocalDate 등)</td></tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">왜 @field: 접두사?</div>
+      <p>
+        Kotlin data class의 파라미터는 기본적으로 여러 곳(필드, getter, 생성자 파라미터)에 어노테이션이 적용될 수 있어 명시해야 합니다.
+        jakarta.validation은 <strong>필드 레벨</strong>에서 동작하므로 <code>@field:NotBlank</code>. Java라면 그냥 <code>@NotBlank</code>만 쓰면 됩니다.
+      </p>
+    </div>
+
+    <h2 id="response"><span class="section-num">7</span> 응답 처리 (ResponseEntity)</h2>
+
+<pre><code class="language-kotlin">// 1. 리턴값을 자동으로 200 OK로
+@GetMapping("/{id}")
+fun get(@PathVariable id: Long): OrderResponse = ...
+
+// 2. @ResponseStatus로 상태코드 지정
+@PostMapping
+@ResponseStatus(HttpStatus.CREATED)  // 201
+fun create(...): OrderResponse = ...
+
+@DeleteMapping("/{id}")
+@ResponseStatus(HttpStatus.NO_CONTENT)  // 204
+fun delete(@PathVariable id: Long) { ... }
+
+// 3. ResponseEntity로 상세 제어
+@GetMapping("/{id}")
+fun get(@PathVariable id: Long): ResponseEntity&lt;OrderResponse&gt; {
+    val order = service.findByIdOrNull(id)
+        ?: return ResponseEntity.notFound().build()
+
+    return ResponseEntity.ok()
+        .header("X-Request-Id", UUID.randomUUID().toString())
+        .cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))
+        .body(OrderResponse.from(order))
+}
+
+// 4. 생성 + Location 헤더
+@PostMapping
+fun create(@Valid @RequestBody req: CreateOrderRequest): ResponseEntity&lt;OrderResponse&gt; {
+    val created = service.create(req.toCommand())
+    val location = URI.create("/orders/${created.id}")
+    return ResponseEntity.created(location).body(OrderResponse.from(created))
+}</code></pre>
+
+    <h2 id="exception"><span class="section-num">8</span> 전역 예외 처리</h2>
+    <p>
+      <code>@ControllerAdvice</code>는 DRF의 <code>exception_handler</code>에 해당. 모든 컨트롤러의 예외를 한 곳에서 처리.
+    </p>
+
+<pre><code class="language-kotlin">// 커스텀 예외
+class OrderNotFoundException(orderId: Long) :
+    RuntimeException("주문을 찾을 수 없습니다: $orderId")
+
+class InsufficientStockException(
+    val productId: String,
+    val requested: Int,
+    val available: Int
+) : RuntimeException("재고 부족: requested=$requested, available=$available")
+
+// 에러 응답 포맷
+data class ErrorResponse(
+    val code: String,
+    val message: String,
+    val details: Map&lt;String, Any&gt; = emptyMap(),
+    val timestamp: Instant = Instant.now(),
+    val path: String? = null
+)
+
+@RestControllerAdvice
+class GlobalExceptionHandler {
+
+    private val logger = LoggerFactory.getLogger(javaClass)
+
+    // 400: validation 실패
+    @ExceptionHandler(MethodArgumentNotValidException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun handleValidation(e: MethodArgumentNotValidException): ErrorResponse {
+        val fields = e.bindingResult.fieldErrors.associate {
+            it.field to (it.defaultMessage ?: "invalid")
+        }
+        return ErrorResponse(
+            code = "VALIDATION_FAILED",
+            message = "입력값이 올바르지 않습니다",
+            details = mapOf("fields" to fields)
+        )
+    }
+
+    // 404
+    @ExceptionHandler(OrderNotFoundException::class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    fun handleOrderNotFound(e: OrderNotFoundException) = ErrorResponse(
+        code = "ORDER_NOT_FOUND",
+        message = e.message ?: "not found"
+    )
+
+    // 409: 비즈니스 충돌
+    @ExceptionHandler(InsufficientStockException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun handleStock(e: InsufficientStockException) = ErrorResponse(
+        code = "INSUFFICIENT_STOCK",
+        message = e.message ?: "stock error",
+        details = mapOf(
+            "productId" to e.productId,
+            "requested" to e.requested,
+            "available" to e.available
+        )
+    )
+
+    // 500: 예상치 못한 에러
+    @ExceptionHandler(Exception::class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    fun handleAll(e: Exception): ErrorResponse {
+        logger.error("Unexpected error", e)
+        return ErrorResponse(
+            code = "INTERNAL_ERROR",
+            message = "내부 오류가 발생했습니다"
+        )
+    }
+}</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">에러 응답 설계 원칙</div>
+      <ul>
+        <li><strong>클라이언트가 기계적으로 분기 가능한 code</strong>: "ORDER_NOT_FOUND" 같은 상수</li>
+        <li><strong>사용자에게 보여줄 message</strong>: i18n 가능한 문구</li>
+        <li><strong>디버깅용 details</strong>: 필드별 에러, 요청 ID 등</li>
+        <li><strong>민감 정보 제외</strong>: stacktrace, 내부 SQL 등은 노출 금지</li>
+        <li><strong>HTTP status + body의 code 이중화</strong>: 4xx/5xx 구분 + 세부 code</li>
+      </ul>
+    </div>
+
+    <h2 id="layered"><span class="section-num">9</span> 계층 아키텍처</h2>
+    <div class="layered">
+      <div class="layer l-controller">
+        <span>① Controller</span>
+        <span>HTTP 처리 (DTO ↔ Command/Query)</span>
+      </div>
+      <div class="layer l-dto">
+        <span>② DTO / Command</span>
+        <span>경계 객체 (요청/응답 모델)</span>
+      </div>
+      <div class="layer l-service">
+        <span>③ Service</span>
+        <span>비즈니스 로직, 트랜잭션</span>
+      </div>
+      <div class="layer l-domain">
+        <span>④ Domain / Entity</span>
+        <span>도메인 모델, 불변 규칙</span>
+      </div>
+      <div class="layer l-repository">
+        <span>⑤ Repository</span>
+        <span>데이터 접근 (JPA, Redis)</span>
+      </div>
+      <div class="layer l-db">
+        <span>⑥ Database</span>
+        <span>PostgreSQL, Redis, etc.</span>
+      </div>
+    </div>
+
+<pre><code class="language-kotlin">// Controller: HTTP만 다룸
+@RestController
+@RequestMapping("/api/v1/orders")
+class OrderController(private val orderService: OrderService) {
+    @PostMapping
+    fun create(@Valid @RequestBody req: CreateOrderRequest) =
+        OrderResponse.from(orderService.create(req.toCommand()))
+}
+
+// Service: 비즈니스 로직
+@Service
+@Transactional
+class OrderService(
+    private val orderRepo: OrderRepository,
+    private val stockService: StockService,
+    private val events: ApplicationEventPublisher
+) {
+    fun create(cmd: CreateOrderCommand): Order {
+        stockService.reserve(cmd.productId, cmd.quantity)
+        val order = Order.create(cmd)
+        val saved = orderRepo.save(order)
+        events.publishEvent(OrderCreatedEvent(saved.id))
+        return saved
+    }
+}
+
+// Domain: 도메인 규칙 (JPA Entity 또는 순수 data class)
+@Entity
+class Order(
+    @Id @GeneratedValue val id: Long = 0,
+    val productId: String,
+    val quantity: Int,
+    var status: OrderStatus = OrderStatus.PENDING
+) {
+    fun cancel() {
+        require(status == OrderStatus.PENDING) { "이미 진행된 주문은 취소 불가" }
+        status = OrderStatus.CANCELLED
+    }
+}
+
+// Repository: DB 인터페이스
+interface OrderRepository : JpaRepository&lt;Order, Long&gt; {
+    fun findByProductId(productId: String): List&lt;Order&gt;
+}</code></pre>
+
+    <h2 id="i18n"><span class="section-num">10</span> i18n (글로벌 서비스 대비)</h2>
+    <p>
+      <strong>티니어 채용공고</strong>에 "글로벌 멀티 플랫폼", "다국어/다지역 API"가 명시되어 있어 중요합니다.
+    </p>
+
+<pre><code class="language-yaml"># application.yml
+spring:
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+    fallback-to-system-locale: false</code></pre>
+
+<pre><code>src/main/resources/i18n/
+├── messages.properties           # 기본 (영어 또는 한국어)
+├── messages_ko.properties        # 한국어
+├── messages_en.properties        # 영어
+└── messages_ja.properties        # 일본어</code></pre>
+
+<pre><code class="language-properties"># messages_ko.properties
+error.order.not_found=주문을 찾을 수 없습니다: {0}
+error.stock.insufficient=재고가 부족합니다 (요청: {0}, 가능: {1})
+
+# messages_en.properties
+error.order.not_found=Order not found: {0}
+error.stock.insufficient=Insufficient stock (requested: {0}, available: {1})</code></pre>
+
+<pre><code class="language-kotlin">@RestControllerAdvice
+class GlobalExceptionHandler(
+    private val messages: MessageSource
+) {
+    @ExceptionHandler(OrderNotFoundException::class)
+    fun handle(e: OrderNotFoundException, locale: Locale): ErrorResponse {
+        val msg = messages.getMessage(
+            "error.order.not_found",
+            arrayOf(e.orderId),
+            locale
+        )
+        return ErrorResponse(code = "ORDER_NOT_FOUND", message = msg)
+    }
+}
+
+// 클라이언트는 Accept-Language 헤더로 locale 지정
+// Accept-Language: ko, en;q=0.9</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">글로벌 서비스 운영 팁</div>
+      <ul>
+        <li><strong>모든 유저 입력은 UTF-8</strong>. DB collation도 <code>utf8mb4</code> 또는 <code>UTF8</code></li>
+        <li><strong>시간대</strong>: DB엔 UTC로 저장, 표시는 클라이언트 timezone (Asia/Seoul, America/Los_Angeles)</li>
+        <li><strong>날짜/숫자 포맷</strong>: <code>LocalDate</code> vs <code>Instant</code> 구분 명확히. <code>java.time</code> 사용</li>
+        <li><strong>통화</strong>: BigDecimal + 통화 코드 별도. double 금지</li>
+        <li><strong>지역별 응답</strong>: CDN edge에서 locale 기반 분기 (CloudFront + Lambda@Edge)</li>
+      </ul>
+    </div>
+
+    <h2 id="openapi"><span class="section-num">11</span> OpenAPI / Swagger</h2>
+    <p>DRF의 drf-spectacular처럼 자동 문서화. <code>springdoc-openapi-starter-webmvc-ui</code> 의존성 추가만 하면 됩니다.</p>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
+
+// application.yml
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+// 접근: http://localhost:8080/swagger-ui.html</code></pre>
+
+<pre><code class="language-kotlin">@RestController
+@RequestMapping("/api/v1/orders")
+@Tag(name = "Orders", description = "주문 API")
+class OrderController {
+
+    @Operation(
+        summary = "주문 생성",
+        responses = [
+            ApiResponse(responseCode = "201", description = "생성 성공"),
+            ApiResponse(responseCode = "400", description = "validation 실패"),
+            ApiResponse(responseCode = "409", description = "재고 부족")
+        ]
+    )
+    @PostMapping
+    fun create(
+        @Parameter(description = "주문 요청") @Valid @RequestBody req: CreateOrderRequest
+    ): OrderResponse = ...
+}</code></pre>
+
+    <h2 id="webflux"><span class="section-num">12</span> WebFlux vs MVC</h2>
+    <table>
+      <thead><tr><th>측면</th><th>Spring MVC</th><th>Spring WebFlux</th></tr></thead>
+      <tbody>
+        <tr><td>모델</td><td>서블릿 (동기, 스레드-per-요청)</td><td>리액티브 (Reactor, 이벤트 루프)</td></tr>
+        <tr><td>내장 서버</td><td>Tomcat / Jetty</td><td>Netty</td></tr>
+        <tr><td>반환 타입</td><td>객체, List, Page</td><td><code>Mono&lt;T&gt;</code>, <code>Flux&lt;T&gt;</code></td></tr>
+        <tr><td>러닝커브</td><td>낮음</td><td>높음 (리액티브 사고)</td></tr>
+        <tr><td>쓰임</td><td>대부분의 서비스</td><td>높은 동시성 필요, 백프레셔 중요</td></tr>
+      </tbody>
+    </table>
+
+    <div class="box box-info">
+      <div class="box-title">언제 WebFlux?</div>
+      <p>
+        대부분은 <strong>MVC로 충분</strong>합니다. WebFlux는 "수만 동시 접속 + 대부분 IO 대기" 시나리오에 유리(채팅, streaming, 외부 API 호출 많은 게이트웨이).
+        Kotlin 코루틴과도 통합되지만, 팀 전체가 리액티브 사고를 이해하지 못하면 디버깅이 어려워집니다.
+        <strong>MVC + Kotlin 코루틴</strong>(Spring Web의 suspend 지원, 6.0+)도 충분히 동시성 확보 가능.
+      </p>
+    </div>
+
+    <h3>Spring Web MVC + 코루틴</h3>
+<pre><code class="language-kotlin">@RestController
+class UserController(private val service: UserService) {
+
+    @GetMapping("/users/{id}")
+    suspend fun get(@PathVariable id: Long): UserResponse {  // suspend 직접 지원
+        return UserResponse.from(service.findById(id))
+    }
+
+    @GetMapping("/users/stream")
+    fun stream(): Flow&lt;UserResponse&gt; = service.streamUsers()
+        .map(UserResponse::from)
+}</code></pre>
+
+    <h2 id="interview"><span class="section-num">13</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. <code>@RestController</code>에서 Entity를 직접 반환하면 왜 안 되나요?</div>
+      <div class="a">
+        A. 3가지 위험: ①<strong>보안</strong> — 비밀번호/토큰 등 내부 필드가 JSON에 노출. ②<strong>성능</strong> — Lazy 연관관계 접근시 N+1 쿼리 발생. ③<strong>결합도</strong> — API 스키마가 DB 스키마에 묶여 컬럼 추가/이름 변경이 breaking change. DTO를 만들어 필요한 필드만 명시적으로 노출하고, Entity → DTO 변환을 Controller 또는 Service 계층에서 수행합니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 예외를 던지는 것 vs <code>Result</code> 타입 사용 중 어느 것을 선호하나요?</div>
+      <div class="a">
+        A. Spring 생태계에선 <strong>예외 기반이 관례</strong>입니다. <code>@ControllerAdvice</code>로 전역 매핑이 깔끔하고, <code>@Transactional</code>의 롤백과도 잘 맞습니다(기본적으로 RuntimeException에 롤백). 다만 <strong>"예상되는 비즈니스 결과"</strong>(사용자 이름 중복 등)는 예외보단 <code>Result</code> 또는 <strong>sealed class</strong>로 표현하는 것도 좋은 선택 — 호출자가 반드시 처리를 고민하게 되니까. 실제로는 혼합: HTTP 경계에선 예외, 서비스 간에는 sealed class.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 글로벌 서비스에서 API 설계 시 고려사항은?</div>
+      <div class="a">
+        A.
+        ①<strong>i18n</strong>: <code>Accept-Language</code> 헤더 + <code>MessageSource</code>로 에러/알림 메시지.
+        ②<strong>시간대</strong>: 서버 저장은 UTC, 응답은 클라이언트 TZ 또는 ISO-8601 w/ offset.
+        ③<strong>지역별 데이터</strong>: 데이터베이스를 region으로 분리 (GDPR 등 규제).
+        ④<strong>CDN</strong>: 정적 응답은 edge 캐시, 동적은 Regional API.
+        ⑤<strong>버전 관리</strong>: <code>/api/v1</code>로 프리픽스 + deprecated 버전 6~12개월 유지.
+        ⑥<strong>통화/숫자</strong>: 금액은 BigDecimal, 통화 코드 ISO 4217.
+        ⑦<strong>언어 중립 식별자</strong>: 텍스트 code 대신 enum.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>@RequestBody</code>로 받은 DTO 검증이 실패하면 어떤 예외가 발생하나요?</div>
+      <div class="a">
+        A. <code>@Valid</code>와 함께 사용한 경우 <code>MethodArgumentNotValidException</code>이 던져지고, 기본 응답은 400 Bad Request. <code>BindingResult</code> 파라미터를 추가하면 예외가 던져지지 않고 결과를 직접 확인 가능하지만 실무에선 <code>@ControllerAdvice</code>로 일괄 처리하는 것이 관용. 중첩 객체는 <code>@Valid</code>(또는 Kotlin에선 <code>@field:Valid</code>)로 깊이 검증 필요.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. REST API 버전 관리 전략은?</div>
+      <div class="a">
+        A. 3가지 흔한 방식:
+        ①<strong>URL 프리픽스</strong> (<code>/api/v1/users</code>): 가장 보편적. 가시성 좋고 캐시/라우팅 쉬움.
+        ②<strong>Content 협상</strong> (<code>Accept: application/vnd.myapi.v2+json</code>): RESTful 순수주의자 선호하지만 디버깅 어려움.
+        ③<strong>헤더</strong> (<code>X-API-Version: 2</code>): 간단하지만 표준 덜함.
+        실무는 <strong>URL 프리픽스 + deprecation header</strong> 조합이 일반적. 새 버전 출시시 <code>Deprecation: true</code>, <code>Sunset: 2026-06-01</code> 헤더로 단계적 폐기 안내.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li><code>@RestController</code> = 컨트롤러 + JSON 자동 직렬화 (Jackson)</li>
+        <li>Entity 직접 노출 금지 → <strong>DTO 패턴</strong>(요청/응답 data class)</li>
+        <li><code>@Valid</code> + jakarta.validation으로 검증, 실패는 <code>@ControllerAdvice</code>에서 일괄 처리</li>
+        <li>계층: Controller → Service → Domain → Repository 책임 분리</li>
+        <li>글로벌 서비스: i18n(<code>MessageSource</code>) + UTC 저장 + ISO-8601</li>
+        <li>OpenAPI(springdoc)로 자동 문서화 + API 버전 관리는 URL 프리픽스</li>
+        <li>대부분 Spring MVC + 코루틴으로 충분. WebFlux는 특수 케이스만</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="09-spring-di-beans.html">&larr; 이전: DI와 Bean</a>
+      <a href="11-spring-data-jpa.html">다음: JPA &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

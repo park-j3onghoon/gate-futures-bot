@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>16 - 분산 시스템 | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+
+    .cache-layers {
+      display: flex; gap: 2px; flex-direction: column; margin: 20px 0;
+      border-radius: 10px; overflow: hidden; border: 1px solid #e5e7eb;
+    }
+    .layer-row {
+      padding: 16px 20px; color: white; font-size: 14px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .layer-browser { background: #3b82f6; }
+    .layer-cdn { background: #6366f1; }
+    .layer-gateway { background: #8b5cf6; }
+    .layer-app { background: #a855f7; }
+    .layer-redis { background: #ec4899; }
+    .layer-db { background: #ef4444; }
+    .layer-row .latency { font-family: monospace; font-size: 12px; opacity: 0.9; }
+
+    .pattern-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 20px 0;
+    }
+    .pattern-card {
+      padding: 18px; border-radius: 10px; border-top: 4px solid;
+      background: white;
+    }
+    .pattern-card h4 { margin: 0 0 8px 0; }
+    .pattern-card.cb { border-top-color: #ef4444; background: #fef2f2; }
+    .pattern-card.bulk { border-top-color: #f59e0b; background: #fef3c7; }
+    .pattern-card.retry { border-top-color: #10b981; background: #ecfdf5; }
+    .pattern-card.timeout { border-top-color: #3b82f6; background: #eff6ff; }
+
+    .cap-triangle {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 24px 0;
+      text-align: center;
+    }
+    .cap-node {
+      padding: 24px; border-radius: 12px; border: 2px solid;
+    }
+    .cap-c { background: #eff6ff; border-color: #3b82f6; }
+    .cap-a { background: #ecfdf5; border-color: #10b981; }
+    .cap-p { background: #fef3c7; border-color: #f59e0b; }
+    .cap-node h3 { margin: 0 0 8px 0; }
+    .cap-node .ex { font-size: 12px; color: #6b7280; }
+
+    .arch-stack {
+      padding: 24px; background: #f9fafb; border-radius: 12px; margin: 20px 0;
+    }
+    .arch-row {
+      display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap;
+    }
+    .arch-item {
+      padding: 8px 14px; background: white; border-radius: 6px;
+      border: 1px solid #d1d5db; font-size: 13px; font-family: monospace;
+    }
+    .arch-item.edge { border-color: #3b82f6; background: #eff6ff; }
+    .arch-item.api { border-color: #10b981; background: #ecfdf5; }
+    .arch-item.async { border-color: #f59e0b; background: #fef3c7; }
+    .arch-item.data { border-color: #ef4444; background: #fef2f2; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>16 - 분산 시스템 설계</h1>
+      <p class="subtitle">티니어 규모(6천만 다운로드 글로벌)를 가정한 시스템 설계</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#scale">확장의 기본: Vertical vs Horizontal</a></li>
+        <li><a href="#cap">CAP 정리와 실전 의미</a></li>
+        <li><a href="#caching">계층형 캐싱 전략</a></li>
+        <li><a href="#mq">메시지 큐와 이벤트 기반</a></li>
+        <li><a href="#lock">분산 락</a></li>
+        <li><a href="#resilience">장애 격리 패턴</a></li>
+        <li><a href="#consistency">일관성 모델</a></li>
+        <li><a href="#msa">MSA vs 모놀리식</a></li>
+        <li><a href="#global">글로벌 서비스 아키텍처</a></li>
+        <li><a href="#design">실전 설계 연습: 광고 미디에이션</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="scale"><span class="section-num">1</span> 확장의 기본</h2>
+    <table>
+      <thead><tr><th></th><th>Scale-Up (수직)</th><th>Scale-Out (수평)</th></tr></thead>
+      <tbody>
+        <tr><td>방식</td><td>서버 스펙 올림 (CPU/RAM)</td><td>서버 수 늘림</td></tr>
+        <tr><td>한계</td><td>물리적 상한 + 비용 급증</td><td>무제한 (이론상)</td></tr>
+        <tr><td>난이도</td><td>낮음</td><td>높음 (상태 관리)</td></tr>
+        <tr><td>장애 영향</td><td>단일 장애점</td><td>격리 가능</td></tr>
+        <tr><td>적용</td><td>DB (어느 시점까지)</td><td>API 서버, 캐시, 큐</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      <strong>Stateless 서비스는 쉽게 수평 확장</strong>. Stateful(DB, 세션)은 공유 스토리지 또는 샤딩으로 해결.
+    </p>
+
+    <h3>Stateless 전환의 핵심</h3>
+    <ul>
+      <li><strong>세션</strong>: 서버 메모리 → Redis(Spring Session)</li>
+      <li><strong>파일</strong>: 로컬 디스크 → S3</li>
+      <li><strong>캐시</strong>: 로컬 맵 → Redis</li>
+      <li><strong>스케줄러</strong>: 단일 서버 cron → 분산 잡 큐 (Quartz cluster, AWS EventBridge)</li>
+    </ul>
+
+    <h2 id="cap"><span class="section-num">2</span> CAP 정리</h2>
+    <p>
+      분산 시스템은 <strong>Consistency(일관성)</strong>, <strong>Availability(가용성)</strong>, <strong>Partition Tolerance(분할 내성)</strong> 중 <strong>2가지만</strong> 보장 가능.
+      네트워크는 언제든 분할될 수 있으므로 실전에선 <strong>CP vs AP 선택</strong>.
+    </p>
+
+    <div class="cap-triangle">
+      <div class="cap-node cap-c">
+        <h3>Consistency</h3>
+        <p style="font-size: 13px; margin: 0 0 6px;">모든 노드가 동일 데이터</p>
+        <div class="ex">RDBMS (PostgreSQL)</div>
+      </div>
+      <div class="cap-node cap-a">
+        <h3>Availability</h3>
+        <p style="font-size: 13px; margin: 0 0 6px;">장애시에도 응답</p>
+        <div class="ex">DynamoDB, Cassandra</div>
+      </div>
+      <div class="cap-node cap-p">
+        <h3>Partition Tolerance</h3>
+        <p style="font-size: 13px; margin: 0 0 6px;">네트워크 분할 견딤</p>
+        <div class="ex">모든 분산 시스템 필수</div>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">실전 의미</div>
+      <p>
+        "네트워크가 끊어졌을 때 <strong>일관성을 희생하고 응답</strong>할지(AP), <strong>가용성을 희생하고 거부</strong>할지(CP)"의 선택.
+        <strong>은행 송금</strong>은 CP(잘못된 잔고 응답 금지), <strong>상품 조회</strong>는 AP(약간 stale해도 응답). 시스템 내 여러 컴포넌트가 각자 다른 선택을 할 수 있음.
+      </p>
+    </div>
+
+    <h2 id="caching"><span class="section-num">3</span> 계층형 캐싱 전략</h2>
+    <p>지연 감소의 핵심. <strong>데이터 소스에 가까울수록 빠르고 비싸고, 멀수록 느리고 저렴</strong>.</p>
+
+    <div class="cache-layers">
+      <div class="layer-row layer-browser">
+        <span>① Browser Cache (HTTP Cache-Control, localStorage)</span>
+        <span class="latency">~0ms (로컬)</span>
+      </div>
+      <div class="layer-row layer-cdn">
+        <span>② CDN (CloudFront, CloudFlare) — 정적 파일 + cacheable API</span>
+        <span class="latency">~10ms (edge)</span>
+      </div>
+      <div class="layer-row layer-gateway">
+        <span>③ API Gateway Cache (AWS API Gateway, Nginx)</span>
+        <span class="latency">~5ms (region)</span>
+      </div>
+      <div class="layer-row layer-app">
+        <span>④ Application Local Cache (Caffeine) — 같은 JVM 내 hot data</span>
+        <span class="latency">~0.1ms</span>
+      </div>
+      <div class="layer-row layer-redis">
+        <span>⑤ Distributed Cache (Redis/ElastiCache)</span>
+        <span class="latency">~1ms</span>
+      </div>
+      <div class="layer-row layer-db">
+        <span>⑥ Database (PostgreSQL, DynamoDB)</span>
+        <span class="latency">~20~100ms</span>
+      </div>
+    </div>
+
+    <h3>Local + Distributed Cache 조합 (2-tier)</h3>
+<pre><code class="language-kotlin">// Caffeine (로컬) + Redis (공유)
+@Configuration
+class CacheConfig {
+    @Bean
+    fun cacheManager(redisTemplate: RedisTemplate&lt;String, Any&gt;): CacheManager {
+        val caffeine = CaffeineCacheManager().apply {
+            setCaffeine(Caffeine.newBuilder()
+                .maximumSize(10_000)
+                .expireAfterWrite(Duration.ofMinutes(1))  // 로컬: 1분
+                .recordStats()
+            )
+        }
+
+        val redis = RedisCacheManager.builder(redisTemplate.connectionFactory!!)
+            .cacheDefaults(
+                RedisCacheConfiguration.defaultCacheConfig()
+                    .entryTtl(Duration.ofMinutes(10))    // Redis: 10분
+            ).build()
+
+        // CompositeCacheManager: 로컬 miss시 Redis 조회
+        return CompositeCacheManager(caffeine, redis)
+    }
+}</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">2-tier 캐시의 장단점</div>
+      <p>
+        <strong>장점</strong>: Redis 왕복도 생략 → 0.1ms, 네트워크 부하 절감.<br>
+        <strong>단점</strong>: 인스턴스 간 동기화 어려움. TTL 짧게(1분) + 이벤트 기반 invalidation (Redis pub/sub)으로 완화.<br>
+        핫 데이터(카테고리, 설정, 환율)에 효과적.
+      </p>
+    </div>
+
+    <h2 id="mq"><span class="section-num">4</span> 메시지 큐와 이벤트 기반</h2>
+    <p>
+      동기 호출의 단점(응답 기다림, 커플링, 장애 전파)을 <strong>비동기 메시지</strong>로 분리.
+    </p>
+
+    <h3>동기 vs 비동기 비교</h3>
+<pre><code class="language-kotlin">// ❌ 동기: 주문 API가 이메일/알림/통계 모두 대기 (1.5초)
+@PostMapping("/orders")
+fun create(req: CreateOrderRequest): OrderResponse {
+    val order = orderService.save(req)       // 50ms
+    emailService.sendConfirmation(order)      // 300ms
+    pushService.notifyMerchant(order)         // 500ms
+    analyticsService.track(order)             // 300ms
+    recommendationService.update(order)       // 400ms
+    return OrderResponse.from(order)
+    // 총: 1550ms, 이메일 실패시 주문도 실패
+}
+
+// ✅ 비동기: 주문은 빠르게 응답, 나머지는 이벤트로 처리
+@PostMapping("/orders")
+fun create(req: CreateOrderRequest): OrderResponse {
+    val order = orderService.save(req)
+    eventPublisher.publishEvent(OrderCreatedEvent(order.id))  // 1ms
+    return OrderResponse.from(order)
+    // 총: 51ms
+}
+
+@Component
+class OrderEventHandlers {
+    @Async
+    @EventListener(OrderCreatedEvent::class)
+    fun sendEmail(event: OrderCreatedEvent) { /* ... */ }
+
+    @Async
+    @EventListener(OrderCreatedEvent::class)
+    fun notifyMerchant(event: OrderCreatedEvent) { /* ... */ }
+}</code></pre>
+
+    <h3>Spring 이벤트 vs 메시지 큐</h3>
+    <table>
+      <thead><tr><th></th><th>Spring 이벤트</th><th>Kafka/SQS</th></tr></thead>
+      <tbody>
+        <tr><td>범위</td><td>같은 JVM</td><td>서비스 간</td></tr>
+        <tr><td>영속성</td><td>없음 (메모리)</td><td>있음 (디스크)</td></tr>
+        <tr><td>재시도</td><td>수동</td><td>built-in (at-least-once)</td></tr>
+        <tr><td>순서</td><td>동기/비동기 선택</td><td>partition 기반 순서 보장</td></tr>
+        <tr><td>확장</td><td>-</td><td>수평 확장 (consumer group)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Kafka 예시 (Spring Kafka)</h3>
+<pre><code class="language-kotlin">// Producer
+@Service
+class OrderService(private val kafka: KafkaTemplate&lt;String, OrderCreatedEvent&gt;) {
+    fun placeOrder(req: CreateOrderRequest): Order {
+        val order = save(req)
+        kafka.send("orders.created", order.id.toString(), OrderCreatedEvent.from(order))
+        return order
+    }
+}
+
+// Consumer
+@Component
+class OrderConsumer {
+    @KafkaListener(topics = ["orders.created"], groupId = "email-service")
+    fun onOrderCreated(event: OrderCreatedEvent) {
+        emailService.send(event)
+    }
+}</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">이벤트 기반 설계 원칙</div>
+      <ul>
+        <li><strong>Idempotency(멱등성)</strong>: 같은 이벤트 재처리해도 결과 동일해야 함 (at-least-once 가정)</li>
+        <li><strong>Outbox 패턴</strong>: DB 커밋과 이벤트 발행을 같은 트랜잭션으로 보장</li>
+        <li><strong>Dead Letter Queue</strong>: 계속 실패하는 메시지 격리</li>
+        <li><strong>이벤트 스키마 관리</strong>: Avro/Protobuf + Schema Registry</li>
+        <li><strong>Saga 패턴</strong>: 분산 트랜잭션 → 보상 트랜잭션 연쇄</li>
+      </ul>
+    </div>
+
+    <h3>Outbox 패턴</h3>
+<pre><code class="language-kotlin">// 문제: save + publish가 원자적이지 않으면 불일치
+@Transactional
+fun placeOrder(req: CreateOrderRequest): Order {
+    val order = orderRepo.save(...)       // ✅ DB 커밋
+    kafka.send(...)                        // ❌ 발행 실패시 DB엔 주문있는데 이벤트 없음
+    return order
+}
+
+// 해결: Outbox — 이벤트를 DB에 먼저 저장, 별도 publisher가 읽어 발행
+@Transactional
+fun placeOrder(req: CreateOrderRequest): Order {
+    val order = orderRepo.save(...)
+    outboxRepo.save(OutboxEvent(
+        topic = "orders.created",
+        payload = OrderCreatedEvent.from(order)
+    ))
+    return order
+    // 커밋시 order + outbox 원자적
+}
+
+@Scheduled(fixedDelay = 1000)
+fun publishOutbox() {
+    outboxRepo.findPending().forEach { event ->
+        kafka.send(event.topic, event.payload)
+        event.markPublished()
+    }
+    // 실패시 다음 주기에 재시도 — at-least-once
+}</code></pre>
+
+    <h2 id="lock"><span class="section-num">5</span> 분산 락</h2>
+    <p>여러 인스턴스가 공유 자원에 동시 접근하는 것을 막기.</p>
+
+    <h3>Redis 기반 분산 락 (Redisson)</h3>
+<pre><code class="language-kotlin">// build.gradle.kts
+implementation("org.redisson:redisson-spring-boot-starter:3.34.1")
+
+@Service
+class OrderService(private val redisson: RedissonClient) {
+
+    fun processPayment(orderId: Long) {
+        val lock = redisson.getLock("order:payment:$orderId")
+        try {
+            // 최대 5초 대기, 30초 lease
+            if (lock.tryLock(5, 30, TimeUnit.SECONDS)) {
+                // Critical section
+                doProcessPayment(orderId)
+            } else {
+                throw ConflictException("다른 요청이 처리 중")
+            }
+        } finally {
+            if (lock.isHeldByCurrentThread) lock.unlock()
+        }
+    }
+}</code></pre>
+
+    <h3>단순 SET NX 방식 (Raw Redis)</h3>
+<pre><code class="language-kotlin">val lockKey = "lock:order:$orderId"
+val token = UUID.randomUUID().toString()
+
+// acquire: SET if not exists + expire 원자적
+val acquired = redisTemplate.opsForValue().setIfAbsent(
+    lockKey, token, Duration.ofSeconds(30)
+) ?: false
+
+if (acquired) {
+    try {
+        // Critical section
+    } finally {
+        // release: 내 토큰일 때만 삭제 (Lua script로 원자적)
+        val luaScript = """
+            if redis.call('get', KEYS[1]) == ARGV[1] then
+                return redis.call('del', KEYS[1])
+            else
+                return 0
+            end
+        """.trimIndent()
+        redisTemplate.execute(
+            DefaultRedisScript(luaScript, Long::class.java),
+            listOf(lockKey), token
+        )
+    }
+}</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">분산 락 주의사항</div>
+      <ul>
+        <li><strong>TTL 필수</strong>: 인스턴스 crash시 락 영원히 걸림 방지</li>
+        <li><strong>비즈니스 처리 시간 &lt; TTL</strong>: 락 만료 중 작업 완료시 다른 인스턴스와 충돌</li>
+        <li><strong>Redlock</strong>: 단일 Redis 장애 대비. 여러 Redis 인스턴스에 과반수 락</li>
+        <li><strong>락 대신 idempotency</strong>가 가능하면 우선 고려 (멱등 키 + Redis SET NX)</li>
+      </ul>
+    </div>
+
+    <h2 id="resilience"><span class="section-num">6</span> 장애 격리 패턴 (Resilience)</h2>
+
+    <div class="pattern-grid">
+      <div class="pattern-card cb">
+        <h4>Circuit Breaker</h4>
+        <p style="font-size: 13px; margin: 0;">외부 서비스 연속 실패시 호출 차단. "일단 실패 반환"으로 장애 전파 방지. Closed→Open→Half-Open.</p>
+      </div>
+      <div class="pattern-card bulk">
+        <h4>Bulkhead</h4>
+        <p style="font-size: 13px; margin: 0;">리소스(스레드풀/커넥션) 분리. 한 기능 폭주해도 다른 기능 영향 X.</p>
+      </div>
+      <div class="pattern-card retry">
+        <h4>Retry + Backoff</h4>
+        <p style="font-size: 13px; margin: 0;">일시적 실패 재시도. 지수 백오프 + jitter로 thundering herd 방지.</p>
+      </div>
+      <div class="pattern-card timeout">
+        <h4>Timeout</h4>
+        <p style="font-size: 13px; margin: 0;">모든 외부 호출에 타임아웃. 느린 의존성이 스레드 고갈시키는 것 방지.</p>
+      </div>
+    </div>
+
+    <h3>Resilience4j 적용</h3>
+<pre><code class="language-kotlin">// build.gradle.kts
+implementation("io.github.resilience4j:resilience4j-spring-boot3:2.2.0")
+
+// application.yml
+resilience4j:
+  circuitbreaker:
+    instances:
+      paymentApi:
+        failureRateThreshold: 50        # 50% 실패율 넘으면 Open
+        waitDurationInOpenState: 30s
+        slidingWindowSize: 10
+  retry:
+    instances:
+      paymentApi:
+        maxAttempts: 3
+        waitDuration: 500
+        exponentialBackoffMultiplier: 2
+  timelimiter:
+    instances:
+      paymentApi:
+        timeoutDuration: 2s
+
+@Service
+class PaymentService(private val client: PaymentClient) {
+
+    @CircuitBreaker(name = "paymentApi", fallbackMethod = "fallback")
+    @Retry(name = "paymentApi")
+    @TimeLimiter(name = "paymentApi")
+    fun charge(req: ChargeRequest): CompletableFuture&lt;PaymentResult&gt; =
+        CompletableFuture.supplyAsync { client.charge(req) }
+
+    fun fallback(req: ChargeRequest, t: Throwable): CompletableFuture&lt;PaymentResult&gt; =
+        CompletableFuture.completedFuture(
+            PaymentResult.failure("결제 서비스 일시 불가")
+        )
+}</code></pre>
+
+    <div class="box-project">
+      <div class="box-title">이 프로젝트의 유사 패턴</div>
+      <p>
+        gate-futures-bot의 <code>supervisorScope</code> + <code>RateLimiter</code>가 <strong>소형 bulkhead + timeout 역할</strong>.
+        CoinWorker 에러가 다른 워커에 전파되지 않는 격리 + Gate.io API rate limit 방어.
+        실무 프로덕션에선 여기에 <strong>Circuit Breaker + Retry</strong>를 추가합니다.
+      </p>
+    </div>
+
+    <h2 id="consistency"><span class="section-num">7</span> 일관성 모델</h2>
+
+    <h3>Strong vs Eventual Consistency</h3>
+    <ul>
+      <li><strong>Strong Consistency</strong>: 쓰기 후 즉시 모든 읽기가 최신 값 반환 (RDBMS).</li>
+      <li><strong>Eventual Consistency</strong>: 시간이 지나면 일치 (DynamoDB, DNS, 캐시). <strong>Stale read 허용</strong>.</li>
+      <li><strong>Read-Your-Writes</strong>: 내가 쓴 것만은 즉시 보이게 (세션 고정 or primary read).</li>
+    </ul>
+
+    <h3>선택 기준</h3>
+    <table>
+      <thead><tr><th>영역</th><th>일관성 요구</th><th>방식</th></tr></thead>
+      <tbody>
+        <tr><td>결제/잔고</td><td>Strong 필수</td><td>RDBMS + 트랜잭션</td></tr>
+        <tr><td>재고</td><td>Strong (오버셀 방지)</td><td>RDBMS row lock 또는 Redis atomic</td></tr>
+        <tr><td>상품 조회</td><td>Eventual OK (수초 지연 허용)</td><td>캐시 + TTL</td></tr>
+        <tr><td>조회수/좋아요</td><td>Eventual OK</td><td>Redis INCR + 배치 동기화</td></tr>
+        <tr><td>피드/추천</td><td>Eventual OK</td><td>Materialized view, 비동기 갱신</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="msa"><span class="section-num">8</span> MSA vs 모놀리식</h2>
+    <table>
+      <thead><tr><th></th><th>모놀리식</th><th>MSA</th></tr></thead>
+      <tbody>
+        <tr><td>배포 단위</td><td>1개 JAR</td><td>N개 서비스</td></tr>
+        <tr><td>개발 속도 (초기)</td><td>빠름</td><td>느림 (환경 설정)</td></tr>
+        <tr><td>팀 규모</td><td>~10명</td><td>20+ / 도메인별 팀</td></tr>
+        <tr><td>장애 격리</td><td>어려움</td><td>쉬움 (한 서비스 죽어도 나머지 OK)</td></tr>
+        <tr><td>트랜잭션</td><td>DB 트랜잭션 간단</td><td>분산 트랜잭션 복잡 (Saga)</td></tr>
+        <tr><td>운영</td><td>1개 모니터링</td><td>수십 서비스 + 의존 추적</td></tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">Majestic Monolith → MSA 전환</div>
+      <p>
+        <strong>처음부터 MSA는 안티패턴</strong>. 도메인이 불명확한 상태에서 쪼개면 되돌리기 어렵습니다.
+        관용은 <strong>Modular Monolith</strong>(한 JAR이지만 패키지/모듈로 경계 명확) → 팀/도메인이 성숙하면 쪼갬.
+        티니어 채용공고의 "글로벌 멀티 플랫폼 아우르는 백엔드"는 MSA를 전제한 표현일 가능성.
+      </p>
+    </div>
+
+    <h2 id="global"><span class="section-num">9</span> 글로벌 서비스 아키텍처</h2>
+    <p>티니어처럼 200개국 6천만 다운로드 규모에서 고려할 것들.</p>
+
+    <div class="arch-stack">
+      <div style="font-weight: 700; margin-bottom: 8px;">Edge (전세계)</div>
+      <div class="arch-row">
+        <div class="arch-item edge">Route53 (latency routing)</div>
+        <div class="arch-item edge">CloudFront (400+ edge)</div>
+        <div class="arch-item edge">AWS WAF</div>
+        <div class="arch-item edge">Lambda@Edge (A/B, 지역별 응답)</div>
+      </div>
+
+      <div style="font-weight: 700; margin: 16px 0 8px;">Regional (ap-northeast-2, us-west-2, eu-west-1...)</div>
+      <div class="arch-row">
+        <div class="arch-item api">ALB</div>
+        <div class="arch-item api">ECS/EKS (Kotlin Spring Boot)</div>
+        <div class="arch-item api">API Gateway (rate limit)</div>
+        <div class="arch-item data">ElastiCache (region별)</div>
+        <div class="arch-item data">RDS Aurora Global (1 primary + N read replica)</div>
+      </div>
+
+      <div style="font-weight: 700; margin: 16px 0 8px;">Async / Data</div>
+      <div class="arch-row">
+        <div class="arch-item async">SQS / SNS</div>
+        <div class="arch-item async">Kafka (MSK)</div>
+        <div class="arch-item async">EventBridge (스케줄 + 이벤트)</div>
+        <div class="arch-item data">S3 (cross-region replication)</div>
+        <div class="arch-item data">DynamoDB Global Tables</div>
+      </div>
+
+      <div style="font-weight: 700; margin: 16px 0 8px;">Observability / Ops</div>
+      <div class="arch-row">
+        <div class="arch-item edge">CloudWatch Logs/Metrics</div>
+        <div class="arch-item edge">Datadog / New Relic</div>
+        <div class="arch-item edge">Sentry (error tracking)</div>
+        <div class="arch-item edge">PagerDuty (on-call)</div>
+      </div>
+    </div>
+
+    <h3>지연 최적화 전략</h3>
+    <ul>
+      <li><strong>CDN 캐시</strong>: 정적 파일 + cacheable API 응답(상품, 카테고리) → 엣지 5~30ms</li>
+      <li><strong>Regional 데이터</strong>: 사용자와 가까운 region에 read replica</li>
+      <li><strong>Write는 중앙, Read는 로컬</strong>: Aurora Global의 cross-region 복제 <100ms</li>
+      <li><strong>Connection pooling + HTTP/2</strong>: keep-alive로 TCP 핸드셰이크 절감</li>
+      <li><strong>비동기 처리</strong>: 사용자 응답은 빠르게, 나머지는 SQS로 뒤로</li>
+    </ul>
+
+    <h2 id="design"><span class="section-num">10</span> 실전 설계 연습: 광고 미디에이션</h2>
+    <p>
+      티니어 채용공고의 "<strong>자체 광고 미디에이션과 서비스 대시보드의 백엔드</strong>" 주제를 가정한 설계 연습.
+    </p>
+
+    <h3>요구사항 정리</h3>
+    <ul>
+      <li>광고 요청 TPS 10,000+</li>
+      <li>여러 광고 네트워크(AdMob, Facebook 등) 중 최적 선택</li>
+      <li>응답 시간 p99 &lt; 200ms (유저 경험)</li>
+      <li>노출/클릭/전환 이벤트 실시간 집계</li>
+      <li>설정(광고 우선순위, 지역별 노출 룰) 핫 리로드</li>
+      <li>글로벌 배포</li>
+    </ul>
+
+    <h3>아키텍처 개략</h3>
+<pre><code>Mobile App
+    ↓ HTTPS (region별 latency routing)
+CloudFront / Regional ALB
+    ↓
+Ad Mediation API (ECS Fargate, auto-scale)
+    ├─ Redis: 광고 설정 캐시 (1s TTL + pub/sub invalidate)
+    ├─ Redis: 사용자 최근 노출 기록 (Rate cap)
+    ↓
+광고 네트워크 순위 결정 (비즈니스 로직)
+    ├─ Waterfall: 1순위 네트워크 호출 → 실패시 2순위
+    └─ Bidding: 여러 네트워크에 병렬 호출 → 최고가 선택
+    ↓
+이벤트 발행 (Kafka or SQS)
+    ├─ 실시간 집계 (Kinesis Analytics, ClickHouse)
+    └─ 배치 집계 (EMR, Athena)
+    ↓
+대시보드 API (Spring Boot)
+    ├─ ClickHouse: OLAP 쿼리
+    └─ PostgreSQL: 광고주 설정, 캠페인</code></pre>
+
+    <h3>구현 포인트</h3>
+    <ul>
+      <li><strong>Non-blocking</strong>: 여러 광고 네트워크 병렬 호출은 WebFlux 또는 코루틴 <code>async + awaitAll</code></li>
+      <li><strong>Circuit Breaker</strong>: 한 네트워크가 느려지면 제외, 주기적으로 재시도</li>
+      <li><strong>Timeout</strong>: 각 네트워크 호출에 150ms timeout (전체 p99 200ms 위해)</li>
+      <li><strong>Rate Cap</strong>: Redis INCR + EXPIRE로 사용자당 "분당 광고 노출 횟수" 제한</li>
+      <li><strong>설정 핫 리로드</strong>: Spring Cloud Config + Redis pub/sub으로 무배포 설정 변경</li>
+      <li><strong>이벤트 중복</strong>: 클라이언트 생성 UUID + Redis SET NX로 멱등 처리</li>
+      <li><strong>A/B 테스트</strong>: Feature flag(LaunchDarkly) 또는 설정 기반</li>
+    </ul>
+
+    <h2 id="interview"><span class="section-num">11</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. 트래픽이 10배 증가했을 때 어떻게 대응하시겠어요?</div>
+      <div class="a">
+        A. 단계적 접근:
+        ①<strong>측정</strong>: CloudWatch/Prometheus로 병목 식별(CPU? DB? 외부 API?).
+        ②<strong>Auto scaling</strong>: 이미 설정된 ECS/K8s HPA로 수평 확장. 부족하면 인스턴스 타입 up.
+        ③<strong>DB 읽기 분산</strong>: Read replica 추가, 애플리케이션 레벨 라우팅(<code>@Transactional(readOnly = true)</code>).
+        ④<strong>캐싱 추가</strong>: 핫 데이터를 Redis로, 정적 응답은 CDN.
+        ⑤<strong>비동기화</strong>: 동기 호출 중 후처리 가능한 것을 큐로 분리(이메일, 통계, 알림).
+        ⑥<strong>CQRS/분리</strong>: 읽기 모델을 별도 DB/캐시로(오래된 해결).
+        ⑦<strong>샤딩</strong>: 그래도 안되면 DB 샤딩(최후의 수단, 복잡).
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 분산 트랜잭션이 필요한 상황을 설명하고 해결책을 제시해보세요.</div>
+      <div class="a">
+        A. 예: "주문 생성 + 재고 차감 + 결제"를 여러 서비스가 담당할 때. 2가지 접근:
+        ①<strong>2PC (Two-Phase Commit)</strong>: 강한 일관성, but 성능 낮고 coordinator 장애 취약. 실무에선 거의 안 씀.
+        ②<strong>Saga 패턴</strong>: 각 로컬 트랜잭션을 순차 실행, 실패시 <strong>보상 트랜잭션</strong>(취소) 연쇄. Choreography(이벤트 기반) 또는 Orchestration(중앙 조정자).
+        실무 <strong>실용 솔루션</strong>:
+        ①<strong>Outbox 패턴</strong>으로 DB + 이벤트 원자성 보장.
+        ②<strong>멱등성 + 재시도</strong>로 부분 실패 복구.
+        ③가능하면 <strong>eventual consistency 수용</strong>(UX 허용 범위 내).
+        완벽한 일관성 대신 "복구 가능한 불일치"를 설계.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 캐시와 DB 사이 일관성을 어떻게 유지하시나요?</div>
+      <div class="a">
+        A. 4가지 전략 조합:
+        ①<strong>TTL</strong>: 짧은 TTL(10~60s)이면 stale이 금방 해소. 단순, 기본.
+        ②<strong>Write-through</strong>: 쓰기 시 DB + 캐시 동시 갱신. 쓰기 비용 2배.
+        ③<strong>Cache-aside + evict</strong>: 쓰기 후 캐시 삭제. 다음 read가 재로드. 가장 흔함.
+        ④<strong>이벤트 기반 invalidate</strong>: DB 변경 이벤트를 Kafka/Redis pub/sub으로 발행, 각 인스턴스가 로컬 캐시 갱신.
+        <strong>주의</strong>: "DB 커밋 전 캐시 갱신 → 롤백되면 불일치". Transaction synchronization으로 <strong>AFTER_COMMIT 단계에서 캐시 갱신</strong>하거나 Outbox 사용. 완벽 일관성은 어려우므로 "허용 가능 stale 시간"을 비즈니스와 합의.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. MSA에서 서비스 간 통신 방식을 어떻게 선택하시나요?</div>
+      <div class="a">
+        A. 2대 축: <strong>동기 vs 비동기</strong>, <strong>REST vs gRPC vs 이벤트</strong>.
+        <strong>동기 REST</strong>: 단순, 디버깅 쉬움. 강한 커플링, 장애 전파.
+        <strong>동기 gRPC</strong>: 성능 좋음(binary), 타입 안전(proto), HTTP/2 스트리밍. 사내 서비스 간.
+        <strong>비동기 이벤트(Kafka)</strong>: 느슨한 커플링, 확장 쉬움. 즉시 응답 불가, 복잡도 증가.
+        <strong>실전 기준</strong>: <strong>"쓰기 후 결과가 즉시 필요한가"</strong>. 예: 로그인 검증은 동기(gRPC), 주문 생성 후 추천 업데이트는 비동기(Kafka). 읽기는 대개 REST/GraphQL, 쓰기는 경우에 따라 혼합. 이벤트 주도 아키텍처가 확장성엔 유리하지만 <strong>디버깅/추적 복잡성</strong>이 큰 비용.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 글로벌 서비스 구축시 주요 고려사항은?</div>
+      <div class="a">
+        A.
+        ①<strong>지연</strong>: CDN + 지역별 배포(ap-northeast-2, us-west-2, eu-west-1). Route53 latency routing.
+        ②<strong>데이터 일관성</strong>: Aurora Global(cross-region 복제) 또는 region별 분리(GDPR 등 규제).
+        ③<strong>i18n/l10n</strong>: 언어별 리소스, 시간대(UTC 저장), 통화(ISO 4217).
+        ④<strong>규제</strong>: GDPR(EU), CCPA(CA), 개인정보법(한국). 데이터 지역화.
+        ⑤<strong>결제</strong>: 현지 결제 수단 통합 (Stripe, Adyen, 카카오페이 등).
+        ⑥<strong>장애 대응</strong>: region failover 계획 + 훈련(Chaos Engineering).
+        ⑦<strong>CDN 캐시 전략</strong>: user-agent/locale 기반 variation, Vary header.
+        ⑧<strong>비용</strong>: data transfer cost가 region 간 비쌈. 설계시 주의.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Circuit Breaker는 언제 쓰고 어떤 상태가 있나요?</div>
+      <div class="a">
+        A. <strong>외부 서비스(결제/이메일/추천 API 등) 연속 실패시 호출을 잠시 차단</strong>하여 장애 전파와 스레드 고갈을 방지. 3가지 상태:
+        ①<strong>Closed</strong>(정상): 호출 통과. 실패율 집계.
+        ②<strong>Open</strong>(차단): 실패율 임계값(예: 50%) 초과시 전환. 즉시 실패 반환 또는 fallback 호출.
+        ③<strong>Half-Open</strong>(시험): 일정 시간(예: 30초) 후 소수 호출 허용. 성공하면 Closed, 실패하면 Open 복귀.
+        Resilience4j/Hystrix로 구현. <strong>Retry와 함께 쓰면 주의</strong> — retry가 circuit breaker 통계를 오염시킬 수 있어 순서와 scope 잘 설정.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li><strong>Scale-Out 우선</strong> + Stateless 설계 (세션/파일을 외부 스토리지로)</li>
+        <li><strong>CAP</strong>: 네트워크 분할 대비 CP(일관성) vs AP(가용성) 선택</li>
+        <li><strong>계층형 캐싱</strong>: CDN → Gateway → Local(Caffeine) → Redis → DB</li>
+        <li><strong>이벤트 기반</strong>으로 동기 호출 분리, Outbox로 원자성, Saga로 분산 트랜잭션</li>
+        <li><strong>장애 격리</strong>: Circuit Breaker + Bulkhead + Retry + Timeout</li>
+        <li><strong>MSA는 성숙도 있을 때</strong>. Modular Monolith → 쪼개기</li>
+        <li>글로벌: CDN + region별 배포 + Aurora Global + DynamoDB Global Tables</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="15-ci-cd-aws.html">&larr; 이전: CI/CD + AWS</a>
+      <a href="17-interview-prep.html">다음: 면접 전략 &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+</body>
+</html>

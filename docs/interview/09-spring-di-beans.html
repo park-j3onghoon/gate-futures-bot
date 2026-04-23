@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>09 - DI와 Bean | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .code-py::before { content: "Django (DI 없음)"; display: block; padding: 6px 12px; background: #10b981; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .code-kt::before { content: "Spring (DI)"; display: block; padding: 6px 12px; background: #3b82f6; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .side-by-side pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-project .file-ref { font-size: 12px; color: #6b7280; font-family: monospace; background: white; padding: 2px 6px; border-radius: 4px; }
+    .box-anti { border-left: 4px solid #ef4444; background: #fef2f2; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .box-anti .box-title { color: #dc2626; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+
+    .flow-diagram {
+      padding: 20px; background: #f9fafb; border-radius: 12px; margin: 20px 0;
+    }
+    .flow-node {
+      padding: 10px 18px; background: white; border-radius: 8px;
+      border: 2px solid #3b82f6; display: inline-block; font-family: monospace; font-size: 13px;
+    }
+    .flow-node.service { border-color: #10b981; }
+    .flow-node.repo { border-color: #f59e0b; }
+    .flow-node.external { border-color: #ef4444; }
+    .flow-arrow { display: inline-block; margin: 0 8px; color: #6b7280; font-weight: 700; }
+
+    .cycle-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+    .cycle-box { padding: 16px; border-radius: 10px; border: 2px solid; }
+    .cycle-box.bad { background: #fef2f2; border-color: #ef4444; }
+    .cycle-box.good { background: #ecfdf5; border-color: #10b981; }
+
+    .scope-card-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 16px 0;
+    }
+    .scope-card {
+      padding: 14px; background: white; border-left: 4px solid; border-radius: 4px;
+    }
+    .scope-card.singleton { border-left-color: #3b82f6; }
+    .scope-card.prototype { border-left-color: #f59e0b; }
+    .scope-card.request { border-left-color: #10b981; }
+    .scope-card.session { border-left-color: #8b5cf6; }
+    .scope-card h4 { margin: 0 0 4px 0; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>09 - DI · Bean · IoC</h1>
+      <p class="subtitle">Django에는 없는 개념, Spring의 심장</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#why">왜 DI인가 (Django엔 없는 이유)</a></li>
+        <li><a href="#ioc">IoC: 제어의 역전</a></li>
+        <li><a href="#bean">Bean이란</a></li>
+        <li><a href="#injection">주입 방식 3가지 (생성자 권장)</a></li>
+        <li><a href="#scope">Bean 스코프</a></li>
+        <li><a href="#configuration">@Configuration과 수동 Bean 등록</a></li>
+        <li><a href="#qualifier">동일 타입이 여러 개일 때 (@Qualifier, @Primary)</a></li>
+        <li><a href="#conditional">조건부 Bean</a></li>
+        <li><a href="#cycle">순환 의존</a></li>
+        <li><a href="#project">gate-futures-bot의 DI 구조</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="why"><span class="section-num">1</span> 왜 DI인가 (Django엔 없는 이유)</h2>
+    <p>
+      Django는 <strong>함수/클래스를 직접 import해서 호출</strong>합니다. 의존 관리는 개발자 책임.
+      Spring은 <strong>Bean 컨테이너(ApplicationContext)가 객체 생성과 의존 연결을 대신</strong> 합니다.
+    </p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># Django: 서비스를 직접 인스턴스화
+# views.py
+from myapp.services import EmailService, UserRepo
+
+def send_welcome(request, user_id):
+    repo = UserRepo()
+    user = repo.get(user_id)
+
+    email = EmailService(
+        api_key=settings.SENDGRID_KEY
+    )
+    email.send(user.email, "Welcome!")
+    return ...
+
+# 문제:
+# - EmailService를 테스트할 때 Mock 주입 어려움
+# - SENDGRID_KEY를 여기저기서 import
+# - 구현체 교체시 모든 호출부 수정</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">// Spring: Bean 컨테이너가 의존 주입
+@RestController
+class UserController(
+    private val userRepo: UserRepository,
+    private val emailService: EmailService
+) {
+    @GetMapping("/welcome/{id}")
+    fun sendWelcome(@PathVariable id: Long) {
+        val user = userRepo.findById(id)
+        emailService.send(user.email, "Welcome!")
+    }
+}
+
+// 장점:
+// - Mock EmailService를 테스트에 주입 쉬움
+// - SENDGRID_KEY는 EmailService 생성시 1회만
+// - EmailService 구현 교체해도 Controller 변화 없음</code></pre>
+      </div>
+    </div>
+
+    <h2 id="ioc"><span class="section-num">2</span> IoC: 제어의 역전</h2>
+    <p>
+      <strong>Inversion of Control</strong> — "객체를 누가 만들고 관리하느냐"의 주체가 개발자 코드에서 프레임워크로 넘어감.
+      DI는 IoC를 구현하는 한 방식.
+    </p>
+
+    <h3>용어 정리</h3>
+    <ul>
+      <li><strong>IoC 컨테이너</strong> = Spring의 <code>ApplicationContext</code>. Bean을 생성/보관/주입</li>
+      <li><strong>Bean</strong> = IoC 컨테이너가 관리하는 객체</li>
+      <li><strong>DI (Dependency Injection)</strong> = 필요한 Bean을 생성자/필드로 자동 주입</li>
+      <li><strong>@Component</strong> = "이 클래스를 Bean으로 만들어라"는 표시</li>
+    </ul>
+
+    <h2 id="bean"><span class="section-num">3</span> Bean이란</h2>
+    <p>Bean으로 등록하는 3가지 방법:</p>
+
+    <h3>방법 1: 스테레오타입 어노테이션 (가장 흔함)</h3>
+<pre><code class="language-kotlin">@Component      // 일반 컴포넌트
+class RateLimiter
+
+@Service        // 비즈니스 로직
+class OrderService
+
+@Repository     // 데이터 접근
+class UserRepository
+
+@RestController // 웹 API
+class UserController
+
+@Configuration  // 수동 Bean 정의
+class AppConfig
+
+// 모두 내부적으로 @Component. 의도를 표현할 뿐</code></pre>
+
+    <h3>방법 2: @Bean 메서드 (3rd party 라이브러리)</h3>
+<pre><code class="language-kotlin">@Configuration
+class RedisConfig {
+    @Bean
+    fun redisTemplate(connectionFactory: RedisConnectionFactory): RedisTemplate&lt;String, String&gt; {
+        return RedisTemplate&lt;String, String&gt;().apply {
+            setConnectionFactory(connectionFactory)
+            keySerializer = StringRedisSerializer()
+            valueSerializer = StringRedisSerializer()
+        }
+    }
+
+    @Bean
+    fun objectMapper(): ObjectMapper = jacksonObjectMapper().apply {
+        registerModule(JavaTimeModule())
+        disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+    }
+}</code></pre>
+
+    <h3>방법 3: 자동 구성 (Spring Boot Starter)</h3>
+<pre><code class="language-yaml"># spring-boot-starter-data-jpa만 넣어도:
+# - DataSource (HikariCP)
+# - EntityManagerFactory
+# - PlatformTransactionManager
+# - JpaRepository 구현체
+# 전부 자동 Bean 등록</code></pre>
+
+    <h2 id="injection"><span class="section-num">4</span> 주입 방식 3가지</h2>
+
+    <h3>4.1 생성자 주입 (⭐ 권장)</h3>
+<pre><code class="language-kotlin">@Service
+class OrderService(
+    private val repository: OrderRepository,
+    private val paymentClient: PaymentClient,
+    private val eventPublisher: ApplicationEventPublisher
+) {
+    fun placeOrder(cmd: OrderCommand) { /* ... */ }
+}
+
+// Spring이 찾아서: new OrderService(orderRepo, paymentClient, eventPublisher)</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">왜 생성자 주입인가 (3가지 이유)</div>
+      <ol>
+        <li><strong>불변성</strong>: <code>val</code>로 선언 가능 → 재할당 방지</li>
+        <li><strong>필수 의존성 명시</strong>: 빠뜨리면 컴파일 에러. 순환 의존도 Spring 부팅 시 감지</li>
+        <li><strong>테스트 용이</strong>: <code>OrderService(mockRepo, mockClient, mockPublisher)</code>로 Spring 없이 생성 가능</li>
+      </ol>
+    </div>
+
+    <h3>4.2 필드 주입 (사용 금지 권장)</h3>
+<pre><code class="language-kotlin">// ❌ 비권장
+@Service
+class OrderService {
+    @Autowired lateinit var repository: OrderRepository
+    @Autowired lateinit var paymentClient: PaymentClient
+}
+
+// 문제:
+// - val 불가 (반드시 var + lateinit)
+// - Spring 없이 인스턴스화 불가 → 테스트 어려움
+// - 숨겨진 의존성 (IDE에서 생성자로 파악 불가)
+// - final 필드가 아니라 리플렉션으로 주입 → 약간의 오버헤드</code></pre>
+
+    <h3>4.3 세터 주입 (특수 상황)</h3>
+<pre><code class="language-kotlin">@Service
+class OrderService {
+    private var optionalLogger: AuditLogger? = null
+
+    @Autowired(required = false)
+    fun setAuditLogger(logger: AuditLogger) {
+        this.optionalLogger = logger
+    }
+}
+
+// 언제 쓰나: 선택적 의존성, 런타임 교체가 필요한 경우 (드물다)</code></pre>
+
+    <h2 id="scope"><span class="section-num">5</span> Bean 스코프</h2>
+    <p>Bean이 <strong>언제 생성되고 얼마나 공유되는지</strong>.</p>
+
+    <div class="scope-card-grid">
+      <div class="scope-card singleton">
+        <h4>singleton (기본)</h4>
+        <p style="margin: 0; font-size: 13px;">컨테이너에 <strong>1개만 존재</strong>. 모든 주입 지점이 같은 인스턴스. <strong>99%의 Bean이 singleton</strong>. 무상태(stateless) 또는 thread-safe해야 함.</p>
+      </div>
+      <div class="scope-card prototype">
+        <h4>prototype</h4>
+        <p style="margin: 0; font-size: 13px;"><strong>주입할 때마다 새 인스턴스</strong>. 상태를 가진 객체, 동시성 충돌 우려가 있을 때. 드묾.</p>
+      </div>
+      <div class="scope-card request">
+        <h4>request (web)</h4>
+        <p style="margin: 0; font-size: 13px;"><strong>HTTP 요청당 1개</strong>. 요청 scope 데이터(사용자 컨텍스트 등).</p>
+      </div>
+      <div class="scope-card session">
+        <h4>session (web)</h4>
+        <p style="margin: 0; font-size: 13px;">HTTP 세션당 1개. 사용자별 상태. 요즘은 JWT로 대체되는 추세.</p>
+      </div>
+    </div>
+
+<pre><code class="language-kotlin">@Component
+@Scope("prototype")
+class OrderBuilder { /* ... */ }
+
+@Component
+@Scope(value = WebApplicationContext.SCOPE_REQUEST, proxyMode = ScopedProxyMode.TARGET_CLASS)
+class RequestContext { /* ... */ }</code></pre>
+
+    <div class="box box-warning">
+      <div class="box-title">Singleton에 상태를 넣으면 동시성 버그</div>
+<pre><code class="language-kotlin">// ❌ 위험
+@Service
+class OrderService {
+    private var currentUser: User? = null  // 모든 스레드가 공유!
+
+    fun process(user: User) {
+        currentUser = user  // race condition
+        // ...
+    }
+}
+
+// ✅ 파라미터로 전달 또는 thread-local/scoped
+@Service
+class OrderService {
+    fun process(user: User) { /* user를 파라미터로 */ }
+}</code></pre>
+    </div>
+
+    <h2 id="configuration"><span class="section-num">6</span> @Configuration과 수동 Bean 등록</h2>
+    <p>3rd party 라이브러리 객체를 Bean으로 등록할 때 사용. <strong>메서드 이름이 Bean 이름</strong>.</p>
+
+<pre><code class="language-kotlin">@Configuration
+class HttpClientConfig {
+
+    @Bean
+    fun httpClient(): HttpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(5))
+        .build()
+
+    @Bean
+    fun objectMapper(): ObjectMapper = jacksonObjectMapper().apply {
+        registerModule(JavaTimeModule())
+    }
+
+    // 다른 Bean에 의존할 수도 있음
+    @Bean
+    fun weatherApi(httpClient: HttpClient, objectMapper: ObjectMapper): WeatherApi {
+        return WeatherApiImpl(httpClient, objectMapper)
+    }
+}</code></pre>
+
+    <div class="box-project">
+      <div class="box-title">프로젝트 사용 예: Gate.io SDK Bean 등록</div>
+      <span class="file-ref">src/main/kotlin/.../config/GateApiConfig.kt</span>
+<pre style="margin-top: 8px;"><code class="language-kotlin">@Configuration
+class GateApiConfig {
+    @Bean
+    fun futuresApi(apiProperties: ApiProperties): FuturesApi {
+        val apiClient = ApiClient().apply {
+            basePath = apiProperties.host
+            setApiKeySecret(apiProperties.key, apiProperties.secret)
+        }
+        return FuturesApi(apiClient)
+    }
+}</code></pre>
+      <p style="margin: 8px 0 0; font-size: 13px;">
+        Gate.io SDK의 <code>FuturesApi</code>는 Java 라이브러리라 우리가 <code>@Component</code> 붙일 수 없음.
+        <code>@Bean</code> 메서드로 감싸서 Spring에 등록 + 설정값 주입.
+      </p>
+    </div>
+
+    <h2 id="qualifier"><span class="section-num">7</span> 동일 타입이 여러 개일 때</h2>
+    <p>같은 인터페이스 구현체가 2개 이상이면 Spring이 혼란스러워합니다. 해결책 4가지:</p>
+
+<pre><code class="language-kotlin">// 두 개의 EmailSender 구현
+interface EmailSender { fun send(to: String, msg: String) }
+
+@Component
+class SesEmailSender : EmailSender { /* ... */ }
+
+@Component
+class SmtpEmailSender : EmailSender { /* ... */ }
+
+// 주입 시도 → NoUniqueBeanDefinitionException
+@Service
+class Notifier(private val sender: EmailSender) { /* 에러! */ }</code></pre>
+
+    <h3>해결 1: @Primary — "기본 후보"</h3>
+<pre><code class="language-kotlin">@Component
+@Primary
+class SesEmailSender : EmailSender { /* ... */ }
+
+@Component
+class SmtpEmailSender : EmailSender { /* ... */ }
+
+// 자동으로 SesEmailSender 주입</code></pre>
+
+    <h3>해결 2: @Qualifier — 이름으로 지정</h3>
+<pre><code class="language-kotlin">@Component("ses")
+class SesEmailSender : EmailSender { /* ... */ }
+
+@Component("smtp")
+class SmtpEmailSender : EmailSender { /* ... */ }
+
+@Service
+class Notifier(
+    @Qualifier("ses") private val sender: EmailSender,
+    @Qualifier("smtp") private val backup: EmailSender
+) { /* ... */ }</code></pre>
+
+    <h3>해결 3: @Profile — 환경별 선택</h3>
+<pre><code class="language-kotlin">@Component
+@Profile("prod")
+class SesEmailSender : EmailSender { /* ... */ }
+
+@Component
+@Profile("!prod")  // prod 아닐 때
+class ConsoleEmailSender : EmailSender { /* ... */ }</code></pre>
+
+    <h3>해결 4: List/Map으로 모두 주입</h3>
+<pre><code class="language-kotlin">@Service
+class MultiChannelNotifier(
+    private val senders: List&lt;EmailSender&gt;  // 모든 구현 주입
+) {
+    fun broadcast(msg: String) {
+        senders.forEach { it.send("admin@x.com", msg) }
+    }
+}
+
+// Map&lt;String, EmailSender&gt; — Bean 이름을 key로</code></pre>
+
+    <h2 id="conditional"><span class="section-num">8</span> 조건부 Bean</h2>
+    <p>환경/설정에 따라 Bean 등록 여부를 결정. Spring Boot Auto-configuration이 이것으로 동작.</p>
+
+<pre><code class="language-kotlin">// 1. 특정 클래스가 classpath에 있을 때만
+@Configuration
+@ConditionalOnClass(name = ["redis.clients.jedis.Jedis"])
+class RedisConfig
+
+// 2. 특정 속성이 있을 때만
+@Component
+@ConditionalOnProperty(
+    prefix = "feature.experimental",
+    name = ["enabled"],
+    havingValue = "true",
+    matchIfMissing = false
+)
+class ExperimentalFeature
+
+// 3. 특정 Bean이 없을 때만 (기본 구현 제공)
+@Bean
+@ConditionalOnMissingBean(EmailSender::class)
+fun defaultEmailSender(): EmailSender = ConsoleEmailSender()
+
+// 4. 표현식 기반
+@Component
+@ConditionalOnExpression("'\${app.mode}' == 'PROD'")
+class ProductionMonitor</code></pre>
+
+    <h2 id="cycle"><span class="section-num">9</span> 순환 의존</h2>
+    <p>A → B → A 형태의 의존. Spring Boot 2.6+부터 <strong>기본 에러</strong>로 처리 (예전엔 자동 해결).</p>
+
+    <div class="cycle-compare">
+      <div class="cycle-box bad">
+        <h4>❌ 순환 의존</h4>
+<pre style="margin: 0;"><code class="language-kotlin">@Service
+class OrderService(val userService: UserService)
+
+@Service
+class UserService(val orderService: OrderService)
+// 생성자 주입 + singleton → 서로를 생성 못 함
+// BeanCurrentlyInCreationException</code></pre>
+      </div>
+      <div class="cycle-box good">
+        <h4>✅ 해결: 공통 로직 추출</h4>
+<pre style="margin: 0;"><code class="language-kotlin">@Service
+class OrderService(
+    val userQuery: UserQueryService
+)
+
+@Service
+class UserService(
+    val userQuery: UserQueryService
+)
+
+@Service
+class UserQueryService(
+    val userRepo: UserRepository
+)
+// 공통 로직을 제3 컴포넌트로</code></pre>
+      </div>
+    </div>
+
+    <h3>순환 의존 해결 방법</h3>
+    <ol>
+      <li><strong>설계 재검토</strong>: 대부분 책임이 잘못 분리된 것. 공통 서비스 추출(위 예시)</li>
+      <li><strong>ApplicationEventPublisher</strong>: A → event → B 방향으로 간접 호출</li>
+      <li><strong>@Lazy</strong>: 한쪽을 lazy 프록시로 감싸 순환을 끊음 (임시 방편)</li>
+      <li><strong>세터 주입</strong>: 권장하지 않음 (불변성 손실)</li>
+    </ol>
+
+    <h2 id="project"><span class="section-num">10</span> gate-futures-bot의 DI 구조</h2>
+
+    <h3>의존 그래프</h3>
+    <div class="flow-diagram">
+      <div style="text-align: center;">
+        <div class="flow-node">BotRunner</div>
+        <div style="margin: 10px 0;">↓</div>
+        <div>
+          <div class="flow-node service">WorkerOrchestrator</div>
+          <span class="flow-arrow">+</span>
+          <div class="flow-node service">StrategyAssembler</div>
+          <span class="flow-arrow">+</span>
+          <div class="flow-node">ApiProperties / BotProperties / StrategyProperties</div>
+        </div>
+        <div style="margin: 10px 0;">↓</div>
+        <div>
+          <div class="flow-node service">FuturesTrader</div>
+          <span class="flow-arrow">+</span>
+          <div class="flow-node service">MarketDataService</div>
+          <span class="flow-arrow">+</span>
+          <div class="flow-node">RateLimiter (interface)</div>
+        </div>
+        <div style="margin: 10px 0;">↓</div>
+        <div>
+          <div class="flow-node repo">GateClient</div>
+        </div>
+        <div style="margin: 10px 0;">↓</div>
+        <div>
+          <div class="flow-node external">FuturesApi (Gate.io SDK Bean)</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>각 Bean의 선언</h3>
+    <span class="file-ref">다양한 파일</span>
+<pre><code class="language-kotlin">// 1. @Component — 스테레오타입
+@Component
+class GateClient(
+    private val apiProperties: ApiProperties,   // ConfigurationProperties Bean
+    internal val futuresApi: FuturesApi          // @Bean 메서드로 등록된 3rd party
+)
+
+// 2. @Service — 비즈니스 로직
+@Service
+class FuturesTrader(private val client: GateClient)
+
+@Service
+class MarketDataService(private val client: GateClient)
+
+// 3. @Bean — 3rd party SDK 래핑
+@Configuration
+class GateApiConfig {
+    @Bean
+    fun futuresApi(apiProperties: ApiProperties): FuturesApi {
+        val client = ApiClient().apply { /* ... */ }
+        return FuturesApi(client)
+    }
+}
+
+// 4. @ConfigurationProperties — 설정 Bean (yml 바인딩)
+@Validated
+@ConfigurationProperties(prefix = "bot")
+data class BotProperties(...)
+
+// 5. interface + 구현 — RateLimiter
+interface RateLimiter {
+    suspend fun acquire()
+}
+
+@Component
+class InMemoryRateLimiter : RateLimiter { /* ... */ }
+// 향후 Redis 구현이 필요하면 @Profile로 교체</code></pre>
+
+    <h3>BotRunner: 여러 Bean 한번에 주입</h3>
+    <span class="file-ref">src/main/kotlin/.../worker/BotRunner.kt</span>
+<pre><code class="language-kotlin">@Component
+class BotRunner(
+    private val orchestrator: WorkerOrchestrator,
+    private val assembler: StrategyAssembler,
+    private val apiProperties: ApiProperties,
+    private val botProperties: BotProperties,
+    private val strategyProperties: StrategyProperties
+) {
+    // 5개 Bean이 생성자로 주입됨 — Spring이 자동으로 연결
+}</code></pre>
+
+    <div class="box-project">
+      <div class="box-title">DI가 없었다면 (상상)</div>
+<pre><code class="language-kotlin">// 각 Bean을 사용자 코드에서 직접 생성
+fun main() {
+    val apiProps = ApiProperties(...)
+    val futuresApi = createFuturesApi(apiProps)
+    val client = GateClient(apiProps, futuresApi)
+    val trader = FuturesTrader(client)
+    val marketData = MarketDataService(client)
+    val rateLimiter = InMemoryRateLimiter()
+    val orchestrator = WorkerOrchestrator(
+        botProps, marketData, trader, rateLimiter
+    )
+    val assembler = StrategyAssembler(strategyProps)
+    val runner = BotRunner(orchestrator, assembler, ...)
+    // ... 100줄 지루한 생성 코드
+}
+
+// DI로 자동화 → main은 runApplication 한 줄</code></pre>
+    </div>
+
+    <h2 id="interview"><span class="section-num">11</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. 왜 생성자 주입을 권장하나요?</div>
+      <div class="a">
+        A. 3가지 이유:
+        ①<strong>불변성</strong>: <code>val</code>(또는 Java <code>final</code>)로 의존성 고정. 런타임에 바뀌지 않음.
+        ②<strong>필수 의존성 명시</strong>: 생성자 시그니처로 "무엇이 필요한지" 명확. Spring 없이도 <code>new OrderService(mockRepo, mockClient)</code> 테스트 가능.
+        ③<strong>순환 의존 감지</strong>: 부팅 시 에러로 드러남. 필드 주입은 런타임까지 감춤.
+        또한 생성자가 너무 길면 "클래스가 너무 많은 책임을 가졌다"는 신호 — SRP 위반 감지에도 유용.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Singleton Bean에 상태를 가지면 안 되나요?</div>
+      <div class="a">
+        A. 안 됩니다. Singleton은 <strong>여러 스레드가 동시 접근</strong>하는 공유 객체라 가변 상태는 race condition 유발. 상태가 필요하면:
+        ① <strong>파라미터로 전달</strong>(가장 좋음),
+        ② <strong>scope를 prototype/request로</strong> 변경,
+        ③ <strong>thread-safe 자료구조</strong> 사용(<code>AtomicReference</code>, <code>ConcurrentHashMap</code>).
+        Singleton의 프로퍼티는 <strong>불변 설정값</strong>이거나 <strong>자기 자신도 thread-safe한 컴포넌트</strong>(repository, client)만.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>@Component</code>와 <code>@Bean</code>은 언제 각각 쓰나요?</div>
+      <div class="a">
+        A. <code>@Component</code>는 <strong>내가 작성하는 클래스</strong>에 붙여 자동 Bean 등록. <code>@Bean</code>은 <code>@Configuration</code> 내부의 <strong>팩토리 메서드</strong>로, <strong>3rd party 라이브러리 객체</strong>처럼 내가 수정할 수 없는 클래스를 Bean으로 등록할 때 사용. 또 한 가지 객체에 대한 <strong>복잡한 초기화 로직</strong>(HttpClient에 interceptor 추가 등)이 있을 때도 <code>@Bean</code> 메서드가 적합. 동일 역할이지만 대상과 용도가 다릅니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 순환 의존을 만났을 때 어떻게 해결하나요?</div>
+      <div class="a">
+        A. 일반적으로 <strong>설계 오류 신호</strong>로 보고 해결합니다. 3가지 접근:
+        ①<strong>공통 책임을 제3 컴포넌트로 추출</strong>(권장). 예: <code>UserService ↔ OrderService</code>가 서로 필요하면 <code>UserQueryService</code>를 분리해 둘이 이것에만 의존.
+        ②<strong>이벤트 기반 분리</strong>: <code>ApplicationEventPublisher</code>로 직접 호출을 간접 호출로 바꿈. pub/sub.
+        ③<strong>@Lazy</strong>: 한쪽을 프록시로 감싸 순환을 끊음 (설계 문제를 숨기는 임시 방편).
+        Spring Boot 2.6+는 기본적으로 순환 허용 안 함(<code>spring.main.allow-circular-references=false</code>).
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>@Qualifier</code>와 <code>@Primary</code>는 언제 각각 쓰나요?</div>
+      <div class="a">
+        A. 둘 다 동일 타입 Bean이 여러 개일 때의 선택 전략이지만:
+        <code>@Primary</code>는 "기본 후보"를 지정 — 호출자 쪽에서 아무것도 명시 안 하면 이게 주입. <strong>하나의 "주력"이 명확한 경우</strong>에 깔끔.
+        <code>@Qualifier</code>는 호출 지점에서 <strong>명시적으로</strong> 선택 — 여러 구현을 용도별로 다 쓸 때 적합.
+        <strong>조합도 가능</strong>: Primary로 기본을 정하고 일부 지점에서만 Qualifier로 override.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Bean의 생성 시점은 언제인가요?</div>
+      <div class="a">
+        A. 기본적으로 <strong>애플리케이션 시작 시 한 번에 eager 생성</strong>됩니다 (singleton + eager init). 이점은 설정 오류나 순환 의존을 <strong>부팅 시점에 바로 발견</strong>한다는 것.
+        <code>@Lazy</code>를 붙이면 <strong>처음 사용할 때</strong> 생성(lazy init). 부팅 속도가 중요한 경우(많은 Bean + 개발 환경)에 고려하지만, 프로덕션은 eager가 기본. prototype scope는 <strong>주입할 때마다 새로 생성</strong>.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li>DI = Bean 컨테이너가 객체 생성/주입을 대신 → 결합도 낮추고 테스트 용이</li>
+        <li>주입 방식: <strong>생성자 주입이 정답</strong>. 불변 + 명시적 + 테스트 쉬움</li>
+        <li>Bean 스코프: <strong>singleton이 기본</strong>. 상태 금지, thread-safe 필수</li>
+        <li><code>@Component</code>(내 코드) vs <code>@Bean</code>(3rd party). 스테레오타입(@Service/@Repository)은 의도 표현</li>
+        <li>동일 타입 충돌은 <code>@Primary</code> / <code>@Qualifier</code> / <code>@Profile</code> / List 주입으로 해결</li>
+        <li>조건부 Bean(<code>@ConditionalOn*</code>)은 Spring Boot Auto-configuration의 엔진</li>
+        <li>순환 의존은 설계 재검토가 1순위</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="08-spring-boot-overview.html">&larr; 이전: Spring Boot 개요</a>
+      <a href="10-spring-web-rest.html">다음: REST API &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>04 - 함수·람다·확장 | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .code-py::before { content: "Python"; display: block; padding: 6px 12px; background: #10b981; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .code-kt::before { content: "Kotlin"; display: block; padding: 6px 12px; background: #3b82f6; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .side-by-side pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
+    .box-project {
+      border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px;
+      margin: 20px 0; border-radius: 0 8px 8px 0;
+    }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-project .file-ref { font-size: 12px; color: #6b7280; font-family: monospace; background: white; padding: 2px 6px; border-radius: 4px; }
+    .box-anti {
+      border-left: 4px solid #ef4444; background: #fef2f2; padding: 16px 20px;
+      margin: 16px 0; border-radius: 0 8px 8px 0;
+    }
+    .box-anti .box-title { color: #dc2626; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .scope-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px; margin: 20px 0;
+    }
+    .scope-card {
+      padding: 16px; background: white; border: 1px solid #e5e7eb; border-radius: 10px;
+      border-top: 4px solid;
+    }
+    .scope-card.let { border-top-color: #3b82f6; }
+    .scope-card.run { border-top-color: #10b981; }
+    .scope-card.with { border-top-color: #f59e0b; }
+    .scope-card.apply { border-top-color: #ec4899; }
+    .scope-card.also { border-top-color: #8b5cf6; }
+    .scope-card h4 { margin: 0 0 6px 0; font-family: monospace; font-size: 16px; }
+    .scope-card .sig { font-size: 11px; color: #6b7280; font-family: monospace; margin-bottom: 8px; }
+    .scope-card .desc { font-size: 13px; color: #374151; margin-bottom: 8px; }
+    .scope-card .ex { font-size: 12px; font-family: monospace; background: #f9fafb; padding: 8px; border-radius: 4px; }
+    .tip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .qa {
+      background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px;
+      margin: 16px 0; border-radius: 0 8px 8px 0;
+    }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+    .qa .a { font-size: 14px; color: #374151; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>04 - 함수·람다·확장함수·스코프 함수</h1>
+      <p class="subtitle">Kotlin의 함수형 도구를 Python과 나란히, 그리고 gate-futures-bot 사례로</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#functions">함수 선언의 다양한 형태</a></li>
+        <li><a href="#params">파라미터: default · named · vararg</a></li>
+        <li><a href="#lambda">람다 표현식과 it</a></li>
+        <li><a href="#hof">고차 함수 (Higher-Order Function)</a></li>
+        <li><a href="#trailing">후행 람다 (Trailing Lambda)</a></li>
+        <li><a href="#extension">확장 함수 (핵심)</a></li>
+        <li><a href="#inline">inline 함수는 언제 쓰나</a></li>
+        <li><a href="#scope">스코프 함수 5종 (let/run/with/apply/also)</a></li>
+        <li><a href="#project">gate-futures-bot에서 실제 사용</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="functions"><span class="section-num">1</span> 함수 선언의 다양한 형태</h2>
+    <p>Kotlin의 함수는 <strong>선언 위치에 따라 4가지</strong>: top-level, 클래스 멤버, 로컬(중첩), 확장.</p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># 모듈 레벨 함수 (Python 기본)
+def add(a: int, b: int) -> int:
+    return a + b
+
+# 클래스 메서드
+class Calculator:
+    def add(self, a, b): return a + b
+
+# 로컬 함수 (중첩)
+def outer():
+    def inner(x): return x * 2
+    return inner(5)
+
+# Python엔 "확장 메서드" 없음
+# (monkey patching은 있지만 위험)</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">// 1. Top-level 함수 (파일 최상단)
+fun add(a: Int, b: Int): Int = a + b
+
+// 2. 클래스 멤버 함수
+class Calculator {
+    fun add(a: Int, b: Int) = a + b
+}
+
+// 3. 로컬 함수 (함수 안의 함수)
+fun outer(): Int {
+    fun inner(x: Int) = x * 2
+    return inner(5)
+}
+
+// 4. 확장 함수 (기존 타입에 메서드 추가)
+fun String.shout(): String = this.uppercase() + "!"
+"hello".shout()  // "HELLO!"</code></pre>
+      </div>
+    </div>
+
+    <h3>단일 표현식 함수 (single-expression)</h3>
+    <p>본문이 하나의 식이면 중괄호+return 생략:</p>
+
+<pre><code class="language-kotlin">// full form
+fun square(x: Int): Int {
+    return x * x
+}
+
+// single-expression (리턴 타입도 추론 가능)
+fun square(x: Int) = x * x
+
+// 공개 API는 명시 권장 (가독성)
+fun square(x: Int): Int = x * x</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">실무 관용: 공개 함수는 타입 명시</div>
+      <p>
+        단일 표현식이라도 <code>public</code> 함수는 리턴 타입을 적습니다.
+        구현이 바뀌어도 시그니처가 안 바뀌도록 고정하는 효과.
+        <code>private</code> 함수는 추론에 맡겨도 무방.
+      </p>
+    </div>
+
+    <h2 id="params"><span class="section-num">2</span> 파라미터: default · named · vararg</h2>
+    <p>Python과 거의 동일한 풍부한 기능.</p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># default
+def greet(name, lang="ko"):
+    return f"{lang}: hi {name}"
+
+# named (keyword args)
+greet(name="Teddy", lang="en")
+
+# *args / **kwargs
+def log(level, *msgs, **meta):
+    print(level, msgs, meta)
+log("INFO", "hello", "world", user="teddy")</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">// default parameters
+fun greet(name: String, lang: String = "ko") =
+    "$lang: hi $name"
+
+// named arguments
+greet(name = "Teddy", lang = "en")
+// 파라미터가 많을 때 named가 가독성 UP
+createUser(id = 1, name = "T", email = "t@x", admin = false)
+
+// vararg (가변 인자) — Python *args 대응
+fun log(level: String, vararg msgs: String) {
+    msgs.forEach { println("$level: $it") }
+}
+log("INFO", "hello", "world")
+
+// spread 연산자 (*): 배열을 vararg로
+val items = arrayOf("a", "b")
+log("INFO", *items)</code></pre>
+      </div>
+    </div>
+
+    <div class="box-project">
+      <div class="box-title">프로젝트 사용 예: default 파라미터</div>
+      <span class="file-ref">src/main/kotlin/.../client/GateClient.kt</span>
+<pre style="margin-top: 8px;"><code class="language-kotlin">fun createOrder(
+    contract: String,
+    size: Long,
+    price: String = MARKET_PRICE,      // 기본 시장가
+    tif: FuturesOrder.TifEnum = FuturesOrder.TifEnum.IOC  // 기본 즉시취소
+): OrderResult { /* ... */ }
+
+// 호출부: 필요한 것만 명시
+client.createOrder("BTC_USDT", 1L)                     // 시장가 + IOC
+client.createOrder("BTC_USDT", 1L, price = "50000")   // 지정가</code></pre>
+      <p style="margin: 8px 0 0 0; font-size: 13px;">
+        Python에서도 동일 패턴. Kotlin은 named argument가 더 엄격하게 권장되며, IDE가 자동완성으로 힌트를 줌.
+      </p>
+    </div>
+
+    <h2 id="lambda"><span class="section-num">3</span> 람다 표현식과 <code>it</code></h2>
+    <p>
+      <strong>Kotlin 람다는 Python의 lambda보다 훨씬 자주 쓰입니다</strong>. 1줄 제한도 없고, 고차 함수 인자로 넘기는 관용구의 중심.
+    </p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">square = lambda x: x * x
+square(5)  # 25
+
+# 1줄 제한 때문에 복잡하면 def 필요
+add_and_log = lambda a, b: (
+    print(f"adding"),
+    a + b
+)[1]  # 어색
+
+# 그래서 list comprehension / map 등은
+# 람다 대신 이해식 선호
+result = [x * x for x in range(10)]</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">val square = { x: Int -> x * x }
+square(5)  // 25
+
+// 타입 명시 (파라미터 타입 추론이 어려울 때)
+val adder: (Int, Int) -> Int = { a, b -> a + b }
+
+// 여러 줄 OK — 마지막 식이 반환값
+val process = { x: Int ->
+    println("처리중: $x")
+    val doubled = x * 2
+    doubled + 1  // ← 반환값
+}
+
+// 파라미터 1개면 it으로 생략 가능
+listOf(1, 2, 3).map { it * it }  // [1, 4, 9]
+
+// 사용 안 하는 파라미터는 _
+map.forEach { (_, value) -> println(value) }</code></pre>
+      </div>
+    </div>
+
+    <h3>람다의 타입 표기</h3>
+    <p>Kotlin 람다는 일급 객체, 타입으로도 표현됩니다:</p>
+
+<pre><code class="language-kotlin">// 함수 타입: (파라미터 타입들) -> 리턴 타입
+val noArgs: () -> Unit = { println("hi") }
+val oneArg: (Int) -> String = { "num: $it" }
+val twoArgs: (Int, Int) -> Int = { a, b -> a + b }
+
+// 리시버 있는 함수 타입 (A.() -> B)
+val appender: StringBuilder.() -> Unit = { append("world") }
+
+// nullable 함수 타입
+val maybeFn: ((Int) -> Int)? = null</code></pre>
+
+    <h2 id="hof"><span class="section-num">4</span> 고차 함수 (Higher-Order Function)</h2>
+    <p>함수를 <strong>파라미터로 받거나</strong>, <strong>리턴</strong>하는 함수. Kotlin 표준 라이브러리의 핵심 도구.</p>
+
+<pre><code class="language-kotlin">// 함수를 파라미터로
+fun &lt;T&gt; retry(times: Int, action: () -> T): T {
+    var lastException: Throwable? = null
+    repeat(times) {
+        try {
+            return action()
+        } catch (e: Exception) {
+            lastException = e
+        }
+    }
+    throw lastException!!
+}
+
+// 사용
+val result = retry(3) {
+    httpClient.get("https://api.example.com")
+}
+
+// 함수를 리턴
+fun multiplier(factor: Int): (Int) -> Int = { it * factor }
+
+val double = multiplier(2)
+val triple = multiplier(3)
+double(5)  // 10
+triple(5)  // 15</code></pre>
+
+    <div class="box-project">
+      <div class="box-title">프로젝트 사용 예: 고차 함수로 공통 처리 추출</div>
+      <span class="file-ref">src/main/kotlin/.../client/GateClient.kt</span>
+<pre style="margin-top: 8px;"><code class="language-kotlin">// 모든 Gate.io API 호출의 공통: GateApiException → 도메인 예외 매핑 + retry
+private inline fun &lt;T&gt; callApi(context: String, action: () -> T): T = withRetry(context) {
+    try {
+        action()
+    } catch (e: GateApiException) {
+        throw mapGateException(e, context)
+    } catch (e: ApiException) {
+        throw wrapApiException(e, context)
+    }
+}
+
+// 호출부: 각 메서드가 자기 본질 로직만 action 안에 전달
+fun createOrder(...): OrderResult = callApi("createOrder(...)") {
+    val order = FuturesOrder().apply { /* ... */ }
+    toOrderResult(futuresApi.createFuturesOrder(apiProperties.settle, order, null))
+}</code></pre>
+      <p style="margin: 8px 0 0 0; font-size: 13px;">
+        Python에선 <strong>데코레이터</strong>로 해결했을 패턴. Kotlin은 고차 함수 + 후행 람다로 동일한 "cross-cutting concern"을 처리합니다.
+      </p>
+    </div>
+
+    <h2 id="trailing"><span class="section-num">5</span> 후행 람다 (Trailing Lambda)</h2>
+    <p>
+      <strong>람다가 함수의 마지막 파라미터라면 괄호 밖으로 뺄 수 있습니다</strong>. Kotlin 코드가 "블록처럼" 읽히는 핵심 이유.
+    </p>
+
+<pre><code class="language-kotlin">// 표준 호출
+list.filter({ it > 10 })
+list.map({ it * 2 })
+
+// 후행 람다: 람다를 () 밖으로
+list.filter { it > 10 }
+list.map { it * 2 }
+
+// 람다 외 다른 파라미터가 있어도 동일
+fun &lt;T&gt; List&lt;T&gt;.firstOrElse(default: T, predicate: (T) -> Boolean): T =
+    firstOrNull(predicate) ?: default
+
+// 호출
+val x = list.firstOrElse(0) { it > 100 }
+//                    ^^^^   ^^^^^^^^^^^^^
+//                    default  predicate</code></pre>
+
+    <h3>DSL 같은 API 설계</h3>
+    <p>후행 람다 + 리시버 함수 타입으로 "빌더 DSL"을 만들 수 있습니다:</p>
+
+<pre><code class="language-kotlin">// Kotlin stdlib의 buildString
+val s = buildString {
+    // this는 StringBuilder
+    append("Hello, ")
+    append("world")
+    appendLine()
+    append("!")
+}
+
+// HTML DSL 예시 (kotlinx.html)
+val html = html {
+    head { title("My Page") }
+    body {
+        h1 { +"Hello" }
+        p { +"Welcome" }
+    }
+}
+
+// Spring의 routerFunction DSL
+router {
+    GET("/users/{id}") { req -> /* ... */ }
+    POST("/users") { req -> /* ... */ }
+}</code></pre>
+
+    <h2 id="extension"><span class="section-num">6</span> 확장 함수 (⭐ Kotlin의 킬러 기능)</h2>
+    <p>
+      <strong>기존 클래스의 소스를 건드리지 않고 메서드를 추가</strong>. Python monkey-patching과 비슷하지만 <strong>컴파일 타임에 정적 디스패치</strong>되어 안전.
+    </p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># Python: monkey-patching (위험)
+def shout(self):
+    return self.upper() + "!"
+
+str.shout = shout  # 전역 영향, 런타임 패치
+"hello".shout()     # "HELLO!"
+
+# 대개는 유틸 함수로 작성
+def shout(s: str) -> str:
+    return s.upper() + "!"
+
+shout("hello")</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">// Kotlin: 확장 함수 (안전)
+fun String.shout(): String = this.uppercase() + "!"
+
+"hello".shout()  // "HELLO!"
+
+// this는 수신자(receiver) = 이 문자열
+// 타입 외부에서 .메서드()처럼 호출 가능
+
+// 확장 함수는 import로 scope 제어
+// import com.mylib.shout
+// → 이 파일에서만 유효</code></pre>
+      </div>
+    </div>
+
+    <h3>확장 함수가 유용한 상황</h3>
+    <ol>
+      <li><strong>써드파티 타입에 유틸 추가</strong> (Java 타입, stdlib 등 수정 불가한 대상)</li>
+      <li><strong>유틸 클래스 탈피</strong>: <code>StringUtils.isBlank(s)</code> 대신 <code>s.isBlank()</code></li>
+      <li><strong>도메인 친화적 DSL</strong>: <code>3.days.ago</code>, <code>100.USD</code> 같은 표현</li>
+      <li><strong>"조건부" 메서드</strong>: 특정 타입일 때만 호출 가능한 메서드</li>
+    </ol>
+
+<pre><code class="language-kotlin">// 1. 써드파티 Java 타입에 추가
+fun LocalDate.isWeekend(): Boolean =
+    dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY
+
+LocalDate.now().isWeekend()
+
+// 2. List에 유틸 (stdlib도 그렇게 만들어짐)
+fun &lt;T&gt; List&lt;T&gt;.secondOrNull(): T? = if (size >= 2) this[1] else null
+
+// 3. 제네릭 제약 (특정 타입만)
+fun List&lt;Int&gt;.sumPositive(): Int = filter { it > 0 }.sum()
+
+// 4. 확장 프로퍼티
+val String.lastChar: Char
+    get() = this[length - 1]
+
+"hello".lastChar  // 'o'</code></pre>
+
+    <div class="box-anti">
+      <div class="box-title">확장 함수의 함정: 정적 디스패치</div>
+      <p>
+        확장 함수는 <strong>컴파일 타임에 타입에 따라 결정</strong>되므로, 다형성이 동작하지 않습니다:
+      </p>
+<pre style="margin: 8px 0;"><code class="language-kotlin">open class Animal
+class Dog : Animal()
+
+fun Animal.sound() = "동물 소리"
+fun Dog.sound() = "멍멍"
+
+val a: Animal = Dog()
+a.sound()  // "동물 소리" (Animal로 선언되어 있어서)
+// 일반 메서드라면 "멍멍"이 호출되지만 확장은 아님</code></pre>
+      <p style="margin: 8px 0 0 0; font-size: 13px;">
+        → "실제 타입에 따라 동작이 달라져야 한다"면 확장 함수가 아니라 <strong>일반 메서드 + override</strong>를 쓰세요.
+      </p>
+    </div>
+
+    <h2 id="inline"><span class="section-num">7</span> inline 함수는 언제 쓰나</h2>
+    <p>
+      람다는 내부적으로 <strong>객체 할당</strong>이 발생합니다. 고차 함수가 자주 호출되면 GC 부담이 될 수 있습니다.
+      <code>inline</code> 키워드를 붙이면 컴파일러가 <strong>호출 위치에 코드를 직접 복붙</strong>하여 객체 생성을 없앱니다.
+    </p>
+
+<pre><code class="language-kotlin">// 일반 고차 함수: 호출할 때마다 람다 객체 생성
+fun measure(block: () -> Unit) {
+    val start = System.nanoTime()
+    block()
+    println("elapsed: ${System.nanoTime() - start}")
+}
+
+// inline: 람다가 호출 위치에 펼쳐짐
+inline fun measure(block: () -> Unit) {
+    val start = System.nanoTime()
+    block()
+    println("elapsed: ${System.nanoTime() - start}")
+}
+
+// inline의 부가 효과: return이 호출자를 탈출 가능 (non-local return)
+inline fun forEach(list: List&lt;Int&gt;, action: (Int) -> Unit) {
+    for (item in list) action(item)
+}
+
+fun findFirst(list: List&lt;Int&gt;): Int {
+    forEach(list) { item ->
+        if (item > 10) return item  // findFirst를 탈출!
+    }
+    return -1
+}</code></pre>
+
+    <div class="box box-info">
+      <div class="box-title">언제 inline을 직접 쓰나</div>
+      <p>
+        <strong>대개 안 씁니다</strong>. stdlib의 <code>map</code>, <code>filter</code>, <code>let</code> 등은 이미 inline이라 추가 비용 없음.
+        내가 만드는 일반 유틸은 inline 안 붙여도 OK.
+        <strong>핫루프에서 반복 호출되는 작은 고차 함수</strong>에만 고려.
+      </p>
+    </div>
+
+    <h2 id="scope"><span class="section-num">8</span> 스코프 함수 5종 (⭐ 필수)</h2>
+    <p>
+      <code>let</code>, <code>run</code>, <code>with</code>, <code>apply</code>, <code>also</code>. <strong>객체에 대한 작업을 블록으로 묶어</strong> 표현하는 도구.
+      이름이 비슷해 헷갈리지만, <strong>it/this + 리턴값이 객체 자신/블록 결과</strong> 2축으로 분류하면 명확.
+    </p>
+
+    <div class="scope-grid">
+      <div class="scope-card let">
+        <h4>let</h4>
+        <div class="sig">T.let { it: T -> R } : R</div>
+        <div class="desc">객체를 <code>it</code>으로 받아 변환/처리. 리턴은 블록 결과.</div>
+        <div class="ex">
+x?.let { println(it) }<br>
+val len = name?.let { it.length } ?: 0
+        </div>
+      </div>
+      <div class="scope-card run">
+        <h4>run</h4>
+        <div class="sig">T.run { this: T -> R } : R</div>
+        <div class="desc">객체를 <code>this</code>로 받아 처리. 리턴은 블록 결과.</div>
+        <div class="ex">
+val url = config.run {<br>
+&nbsp;&nbsp;"$scheme://$host:$port"<br>
+}
+        </div>
+      </div>
+      <div class="scope-card with">
+        <h4>with</h4>
+        <div class="sig">with(T) { this: T -> R } : R</div>
+        <div class="desc"><code>run</code>과 동일하나 <strong>확장 함수 아님</strong>. 객체 null 아닐 때 사용.</div>
+        <div class="ex">
+with(stringBuilder) {<br>
+&nbsp;&nbsp;append("a")<br>
+&nbsp;&nbsp;append("b")<br>
+}
+        </div>
+      </div>
+      <div class="scope-card apply">
+        <h4>apply</h4>
+        <div class="sig">T.apply { this: T -> Unit } : T</div>
+        <div class="desc">객체를 <code>this</code>로 설정 후 <strong>객체 자신</strong> 반환. 빌더 패턴에 최적.</div>
+        <div class="ex">
+val order = Order().apply {<br>
+&nbsp;&nbsp;contract = "BTC"<br>
+&nbsp;&nbsp;size = 1<br>
+}
+        </div>
+      </div>
+      <div class="scope-card also">
+        <h4>also</h4>
+        <div class="sig">T.also { it: T -> Unit } : T</div>
+        <div class="desc">객체를 <code>it</code>으로 부가 작업 후 <strong>객체 자신</strong> 반환. 로깅/디버깅.</div>
+        <div class="ex">
+val u = fetchUser()<br>
+&nbsp;&nbsp;.also { logger.info("got $it") }<br>
+&nbsp;&nbsp;.also { metrics.increment() }
+        </div>
+      </div>
+    </div>
+
+    <h3>선택 가이드 (표)</h3>
+    <table>
+      <thead>
+        <tr><th>목적</th><th>추천</th><th>이유</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>null이 아닐 때만 실행</td>
+          <td><code>?.let { }</code></td>
+          <td>safe call과 조합. it으로 명시적 참조</td>
+        </tr>
+        <tr>
+          <td>객체 속성 설정 후 반환</td>
+          <td><code>apply</code></td>
+          <td>this 접근, 빌더 스타일. Java Bean 초기화에 최적</td>
+        </tr>
+        <tr>
+          <td>값을 변환해서 반환</td>
+          <td><code>let</code> / <code>run</code></td>
+          <td>it 선호(간단) vs this 선호(여러 멤버 호출)</td>
+        </tr>
+        <tr>
+          <td>체인 중간에 side effect</td>
+          <td><code>also</code></td>
+          <td>로깅, 디버깅, 검증 등 부가 작업</td>
+        </tr>
+        <tr>
+          <td>여러 메서드 연달아 호출</td>
+          <td><code>with</code></td>
+          <td>객체를 반복 타이핑 안 해도 됨</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box-project">
+      <div class="box-title">프로젝트 사용 예: apply로 Java Bean 초기화</div>
+      <span class="file-ref">src/main/kotlin/.../client/GateClient.kt</span>
+<pre style="margin-top: 8px;"><code class="language-kotlin">// Gate.io SDK의 FuturesOrder는 Java Bean (setter 방식)
+// Kotlin에서 apply로 깔끔하게:
+
+fun createOrder(contract: String, size: Long, price: String, tif: TifEnum): OrderResult {
+    val order = FuturesOrder().apply {
+        this.contract = contract    // Java setter 호출
+        this.size = size
+        this.price = price
+        this.tif = tif
+    }
+    return toOrderResult(futuresApi.createFuturesOrder(settle, order, null))
+}
+
+// apply 없었다면:
+// val order = FuturesOrder()
+// order.contract = contract
+// order.size = size
+// order.price = price
+// order.tif = tif</code></pre>
+    </div>
+
+    <div class="box-project">
+      <div class="box-title">프로젝트 사용 예: ?.let으로 optional 파라미터 적용</div>
+      <span class="file-ref">src/main/kotlin/.../client/GateClient.kt (getCandlesticks)</span>
+<pre style="margin-top: 8px;"><code class="language-kotlin">fun getCandlesticks(
+    contract: String, interval: Interval,
+    limit: Int? = null, fromSec: Long? = null, toSec: Long? = null
+): List&lt;Candle&gt; = callApi("...") {
+    val request = futuresApi.listFuturesCandlesticks(settle, contract).interval(interval.code)
+    limit?.let { request.limit(it) }     // null 아닐 때만 적용
+    fromSec?.let { request.from(it) }
+    toSec?.let { request.to(it) }
+    request.execute().map { toCandle(it) }
+}</code></pre>
+    </div>
+
+    <h2 id="project"><span class="section-num">9</span> gate-futures-bot에서 실제 사용 패턴</h2>
+
+    <h3>9.1 SMA/EMA/RSI 지표 — top-level 순수 함수</h3>
+    <span class="file-ref">src/main/kotlin/.../market/Indicators.kt</span>
+<pre><code class="language-kotlin">// top-level 순수 함수. 클래스 없이 file에 바로.
+// Spring 의존 없음 → 테스트/백테스트에서 자유롭게 호출
+
+fun calculateSma(prices: List&lt;Double&gt;, period: Int): Double? {
+    require(period > 0) { "period must be positive: $period" }
+    if (prices.size &lt; period) return null
+    return prices.takeLast(period).average()
+}
+
+fun calculateEma(prices: List&lt;Double&gt;, period: Int): Double? { /* ... */ }
+fun calculateRsi(prices: List&lt;Double&gt;, period: Int = 14): Double? { /* ... */ }</code></pre>
+    <p>
+      Python이라면 모듈 함수 <code>def calculate_sma(...)</code>로 쓸 것을 Kotlin은 top-level 함수로.
+      클래스로 감쌀 필요 없음.
+    </p>
+
+    <h3>9.2 확장 함수로 공용 로직 재사용</h3>
+    <span class="file-ref">src/main/kotlin/.../market/Indicator.kt</span>
+<pre><code class="language-kotlin">// EntryCondition과 ExitCondition.IndicatorExit가 공유하는 평가 엔진
+fun evaluateIndicator(
+    indicator: Indicator, operator: ComparisonOp,
+    value: Double, period: Int, prices: List&lt;Double&gt;
+): Boolean {
+    val current: Double = when (indicator) {
+        Indicator.RSI -> calculateRsi(prices, period) ?: return false
+        Indicator.SMA -> calculateSma(prices, period) ?: return false
+        Indicator.EMA -> calculateEma(prices, period) ?: return false
+        Indicator.PRICE -> prices.lastOrNull() ?: return false
+    }
+    return when (operator) {
+        ComparisonOp.LT -> current &lt; value
+        ComparisonOp.LTE -> current &lt;= value
+        ComparisonOp.GT -> current > value
+        ComparisonOp.GTE -> current >= value
+    }
+}
+
+// EntryCondition
+class EntryCondition(...) {
+    fun evaluate(prices: List&lt;Double&gt;): Boolean =
+        evaluateIndicator(indicator, operator, value, period, prices)
+}
+
+// ExitCondition.IndicatorExit도 동일 함수 호출 → DRY</code></pre>
+
+    <h3>9.3 고차 함수로 retry 공통화</h3>
+    <span class="file-ref">src/main/kotlin/.../client/GateClient.kt</span>
+<pre><code class="language-kotlin">private inline fun &lt;T&gt; callApi(context: String, action: () -> T): T = withRetry(context) {
+    try {
+        action()
+    } catch (e: GateApiException) {
+        throw mapGateException(e, context)
+    } catch (e: ApiException) {
+        throw wrapApiException(e, context)
+    }
+}
+
+private inline fun &lt;T&gt; withRetry(context: String, action: () -> T): T {
+    return try {
+        action()
+    } catch (e: RateLimitException) {
+        logger.warn("Rate limit, 1.5초 후 재시도: {}", context)
+        Thread.sleep(1500)
+        action()
+    }
+}</code></pre>
+    <p>
+      <strong>Python의 데코레이터</strong>와 유사한 "횡단 관심사 분리"를 Kotlin에선 고차 함수 + 후행 람다로 표현.
+      <code>inline</code>이 붙은 이유는 람다 객체 할당을 피하기 위해.
+    </p>
+
+    <h3>9.4 스코프 함수의 let: null-safe 체이닝</h3>
+    <span class="file-ref">src/main/kotlin/.../worker/CoinWorker.kt</span>
+<pre><code class="language-kotlin">internal fun updateCandles() {
+    val lastTs = candleCache.lastOrNull()?.timestamp
+    val fetched = if (lastTs == null) {
+        marketData.getCandles(contract, interval, limit = config.initialCandleLimit)
+    } else {
+        marketData.getCandles(contract, interval, fromSec = lastTs)
+    }
+    // ...
+}</code></pre>
+
+    <h2 id="interview"><span class="section-num">10</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. <code>apply</code>와 <code>also</code>의 차이를 설명해주세요.</div>
+      <div class="a">
+        A. 둘 다 객체 자신을 리턴한다는 점은 같습니다. 차이는 블록 내부에서 객체를 참조하는 방식:
+        <code>apply</code>는 <code>this</code>로, <code>also</code>는 <code>it</code>으로 받습니다.
+        <strong>apply는 객체 속성을 설정할 때</strong>(setter 연속 호출, Java Bean 초기화),
+        <strong>also는 체인 중간에 side-effect</strong>(로깅, 메트릭 기록)에 주로 씁니다.
+        예: <code>User().apply { name = "a"; age = 30 }</code> vs <code>user.also { log.info("got $it") }</code>.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 확장 함수의 동작 원리는?</div>
+      <div class="a">
+        A. Kotlin 컴파일러는 확장 함수를 <strong>첫 번째 파라미터로 receiver를 받는 static 함수</strong>로 컴파일합니다.
+        예: <code>fun String.shout() = ...</code>은 JVM에서 <code>public static String shout(String receiver)</code>로 변환됩니다.
+        따라서 <strong>정적 디스패치</strong>이며, 런타임 타입이 아니라 <strong>컴파일 타임의 선언 타입</strong>을 기준으로 호출됩니다.
+        다형성이 필요한 경우엔 일반 메서드 + override를 사용해야 합니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>inline</code> 함수는 언제 쓰나요?</div>
+      <div class="a">
+        A. 고차 함수에 람다를 넘길 때 발생하는 <strong>람다 객체 할당 오버헤드</strong>를 제거하고 싶을 때 씁니다.
+        또한 <strong>non-local return</strong>(람다 안에서 호출자 탈출) 같은 언어 기능을 가능하게 합니다.
+        하지만 본문이 긴 함수에 inline을 붙이면 바이트코드가 커져 역효과.
+        <strong>작고 자주 호출되는 고차 함수</strong>에만 적용. stdlib의 let/run/apply 등은 이미 inline입니다.
+        일반적인 비즈니스 로직에선 굳이 쓰지 않습니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Python의 데코레이터에 해당하는 Kotlin 패턴은?</div>
+      <div class="a">
+        A. Kotlin엔 같은 이름의 기능은 없지만 <strong>고차 함수 + 후행 람다</strong>가 같은 목적을 수행합니다.
+        예: 재시도, 측정, 트랜잭션 같은 횡단 관심사는 <code>fun &lt;T&gt; withRetry(block: () -> T): T</code>로 구현하고
+        <code>withRetry { callApi() }</code>처럼 사용합니다. 또 다른 방법은 <strong>AOP</strong>(Spring AOP의 <code>@Transactional</code> 등)를 쓰는 것.
+        어노테이션 기반 횡단 관심사는 Spring이 프록시로 감싸서 처리합니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>let</code>과 <code>run</code>은 어떻게 다른가요?</div>
+      <div class="a">
+        A. 리턴값(블록 결과)은 동일하지만 <strong>receiver 접근 방식</strong>이 다릅니다.
+        <code>let</code>은 <code>it</code>으로, <code>run</code>은 <code>this</code>로.
+        <strong>let</strong>은 주로 null-safe 체인(<code>x?.let { ... }</code>)에 쓰고,
+        <strong>run</strong>은 객체의 여러 멤버를 연속 호출해 결과를 만들 때 (<code>config.run { "$host:$port" }</code>) 씁니다.
+        외부 this와 충돌하는 컨텍스트에선 let이, 그렇지 않으면 run이 간결.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li>함수는 top-level / 멤버 / 로컬 / 확장 4가지. <strong>top-level + 확장</strong>이 Kotlin의 맛</li>
+        <li>default + named 파라미터로 Python 같은 호출 유연성 확보</li>
+        <li>람다는 후행 람다 관용구로 "블록"처럼 읽히게 씀</li>
+        <li>고차 함수로 "데코레이터" 역할의 횡단 관심사 추출</li>
+        <li>확장 함수는 써드파티 타입에 유틸 추가 + import scope로 안전</li>
+        <li>스코프 함수는 <strong>this/it</strong> × <strong>객체 자신/블록 결과</strong> 2축으로 선택</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="03-kotlin-classes.html">&larr; 이전: 클래스 체계</a>
+      <a href="05-kotlin-collections.html">다음: 컬렉션 API &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>08 - Spring Boot 개요 | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .code-py::before { content: "Django"; display: block; padding: 6px 12px; background: #10b981; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .code-kt::before { content: "Spring Boot"; display: block; padding: 6px 12px; background: #3b82f6; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .side-by-side pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-project .file-ref { font-size: 12px; color: #6b7280; font-family: monospace; background: white; padding: 2px 6px; border-radius: 4px; }
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+    .arch-diagram {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0;
+    }
+    .arch-col { padding: 20px; border-radius: 12px; }
+    .arch-col.django { background: #ecfdf5; border: 2px solid #10b981; }
+    .arch-col.spring { background: #eff6ff; border: 2px solid #3b82f6; }
+    .arch-layer {
+      padding: 10px 14px; background: white; border-radius: 6px; margin: 6px 0;
+      font-size: 13px; font-family: monospace;
+    }
+
+    .starter-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px; margin: 16px 0;
+    }
+    .starter-card {
+      padding: 14px; background: white; border-left: 4px solid #3b82f6; border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .starter-card h4 { margin: 0 0 4px 0; font-size: 13px; font-family: monospace; color: #3b82f6; }
+    .starter-card p { margin: 0; font-size: 13px; color: #374151; }
+
+    .profile-diagram {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 16px 0;
+    }
+    .profile-card {
+      padding: 16px; border-radius: 10px; border: 2px solid;
+    }
+    .profile-card.dev { background: #ecfdf5; border-color: #10b981; }
+    .profile-card.staging { background: #fef3c7; border-color: #f59e0b; }
+    .profile-card.prod { background: #fef2f2; border-color: #ef4444; }
+    .profile-card h4 { margin: 0 0 8px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>08 - Spring Boot 개요</h1>
+      <p class="subtitle">Django 개발자를 위한 Spring Boot 철학과 뼈대</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#philosophy">철학: Django vs Spring Boot</a></li>
+        <li><a href="#entry-point">진입점: @SpringBootApplication</a></li>
+        <li><a href="#auto-config">Auto-configuration 마법</a></li>
+        <li><a href="#starters">Starter 생태계</a></li>
+        <li><a href="#config">application.yml 설정</a></li>
+        <li><a href="#profiles">Profile</a></li>
+        <li><a href="#properties">@ConfigurationProperties</a></li>
+        <li><a href="#lifecycle">앱 라이프사이클</a></li>
+        <li><a href="#actuator">Actuator</a></li>
+        <li><a href="#structure">프로젝트 구조</a></li>
+        <li><a href="#project">gate-futures-bot 적용 예</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="philosophy"><span class="section-num">1</span> 철학: Django vs Spring Boot</h2>
+    <p>
+      Django는 <strong>"Batteries included"</strong> — 프레임워크 하나에 모든 기능이 내장.
+      Spring Boot는 <strong>"Starter로 조합"</strong> — 필요한 Starter를 의존성에 넣으면 자동 설정.
+    </p>
+
+    <div class="arch-diagram">
+      <div class="arch-col django">
+        <h4>Django (Monolith 설계)</h4>
+        <div class="arch-layer">URL Router (urls.py)</div>
+        <div class="arch-layer">View (views.py)</div>
+        <div class="arch-layer">Form / Serializer (DRF)</div>
+        <div class="arch-layer">Model (ORM) — 모두 Django 내장</div>
+        <div class="arch-layer">Admin — 무료 제공</div>
+        <div class="arch-layer">Auth / Session — 무료 제공</div>
+        <p style="font-size: 13px; margin: 10px 0 0; color: #059669;">
+          한 패키지에 다 있음. 설정 간단. 관례 따르면 OK.
+        </p>
+      </div>
+      <div class="arch-col spring">
+        <h4>Spring Boot (Modular 설계)</h4>
+        <div class="arch-layer">starter-web (HTTP)</div>
+        <div class="arch-layer">starter-data-jpa (ORM)</div>
+        <div class="arch-layer">starter-security (인증)</div>
+        <div class="arch-layer">starter-data-redis (캐시)</div>
+        <div class="arch-layer">starter-actuator (운영)</div>
+        <div class="arch-layer">... 필요한 것만 골라 추가</div>
+        <p style="font-size: 13px; margin: 10px 0 0; color: #2563eb;">
+          조합 자유. 대규모 프로젝트에서 유연. 학습 곡선은 더 높음.
+        </p>
+      </div>
+    </div>
+
+    <h3>개념 매핑 (Django → Spring Boot)</h3>
+    <table>
+      <thead><tr><th>Django</th><th>Spring Boot</th><th>비고</th></tr></thead>
+      <tbody>
+        <tr><td><code>settings.py</code></td><td><code>application.yml</code> + <code>@ConfigurationProperties</code></td><td>Profile로 환경 분리</td></tr>
+        <tr><td><code>urls.py</code></td><td><code>@RequestMapping</code> / <code>@GetMapping</code></td><td>컨트롤러 클래스에 붙임</td></tr>
+        <tr><td><code>views.py</code></td><td><code>@RestController</code> / <code>@Controller</code></td><td>DRF ViewSet ≈ RestController</td></tr>
+        <tr><td><code>models.py</code></td><td>JPA <code>@Entity</code> + <code>JpaRepository</code></td><td>영속성 컨텍스트가 있다는 게 큰 차이</td></tr>
+        <tr><td><code>serializers.py</code></td><td>DTO class + Jackson 자동 변환</td><td>Kotlin data class가 DTO로 적합</td></tr>
+        <tr><td>middleware</td><td>Servlet Filter / HandlerInterceptor / Spring AOP</td><td>계층별로 용도 다름</td></tr>
+        <tr><td>signals</td><td>Spring Events + <code>@EventListener</code></td><td>ApplicationEvent 기반</td></tr>
+        <tr><td>management command</td><td><code>CommandLineRunner</code> / <code>ApplicationRunner</code></td><td>앱 시작 시 1회 실행</td></tr>
+        <tr><td>Django Admin</td><td>직접 구현 (보통 별도 프론트엔드)</td><td>Spring에 내장 Admin 없음</td></tr>
+        <tr><td>Celery + Beat</td><td><code>@Scheduled</code> / Spring Batch</td><td>분산 작업은 Spring Cloud Task</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="entry-point"><span class="section-num">2</span> 진입점: @SpringBootApplication</h2>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># manage.py (Django 진입점)
+import os
+import sys
+
+if __name__ == "__main__":
+    os.environ.setdefault(
+        "DJANGO_SETTINGS_MODULE",
+        "myapp.settings"
+    )
+    from django.core.management import (
+        execute_from_command_line
+    )
+    execute_from_command_line(sys.argv)
+
+# 실행: python manage.py runserver</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">// Application.kt
+@SpringBootApplication
+class MyApplication
+
+fun main(args: Array&lt;String&gt;) {
+    runApplication&lt;MyApplication&gt;(*args)
+}
+
+// 실행: ./gradlew bootRun
+// 또는: java -jar app.jar</code></pre>
+      </div>
+    </div>
+
+    <h3><code>@SpringBootApplication</code> 3가지 어노테이션의 합</h3>
+    <ul>
+      <li><code>@SpringBootConfiguration</code>: 이 클래스를 설정 클래스로 표시</li>
+      <li><code>@EnableAutoConfiguration</code>: classpath 기반 자동 설정 활성화</li>
+      <li><code>@ComponentScan</code>: 이 패키지와 하위에서 <code>@Component</code>/<code>@Service</code>/<code>@Repository</code>/<code>@Controller</code> 찾아 등록</li>
+    </ul>
+
+    <div class="box box-tip">
+      <div class="box-title">Component Scan 범위</div>
+      <p>
+        <code>@SpringBootApplication</code>이 붙은 클래스의 <strong>패키지와 그 하위</strong>만 스캔됩니다.
+        최상위 패키지(<code>com.example</code>)에 두어야 전체 프로젝트가 스캔됩니다.
+        하위 패키지에 두면 상위/sibling은 인식 안 됨.
+      </p>
+    </div>
+
+    <h2 id="auto-config"><span class="section-num">3</span> Auto-configuration 마법</h2>
+    <p>
+      Spring Boot의 핵심 혁신. <strong>classpath에 어떤 라이브러리가 있느냐에 따라 Bean을 자동 구성</strong>합니다.
+    </p>
+
+    <h3>예: H2 in-memory DB</h3>
+<pre><code class="language-kotlin">// build.gradle.kts에 추가만 하면
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    runtimeOnly("com.h2database:h2")
+}</code></pre>
+    <p>자동으로 일어나는 일:</p>
+    <ol>
+      <li>H2 JDBC 드라이버가 classpath에 있음 감지</li>
+      <li>DataSource Bean 자동 생성 (in-memory H2)</li>
+      <li>JPA EntityManagerFactory Bean 자동 생성</li>
+      <li><code>JpaRepository</code>를 구현한 인터페이스 자동 구현 생성</li>
+      <li>트랜잭션 매니저 자동 구성</li>
+    </ol>
+    <p>코드 변경 전혀 없이 <strong>DB 기반 앱이 동작</strong>합니다. <code>application.yml</code>에서 <code>spring.datasource.url=jdbc:postgresql://...</code>로 바꾸면 PostgreSQL로 자동 전환.</p>
+
+    <h3>Auto-configuration 원리 (조건부 Bean)</h3>
+<pre><code class="language-kotlin">// Spring Boot 내부 코드 (의역)
+@AutoConfiguration
+@ConditionalOnClass(DataSource::class)      // DataSource 클래스가 classpath에 있을 때만
+@ConditionalOnMissingBean(DataSource::class) // 사용자가 DataSource Bean을 안 만든 경우만
+class DataSourceAutoConfiguration {
+    @Bean
+    fun dataSource(properties: DataSourceProperties): DataSource = ...
+}</code></pre>
+    <p>조건이 맞으면 활성, 사용자가 직접 Bean을 정의하면 skip.</p>
+
+    <h2 id="starters"><span class="section-num">4</span> Starter 생태계</h2>
+    <p>Spring Boot의 "가장 많이 쓰는 조합"을 미리 묶어놓은 패키지. 의존성 하나 추가로 관련 라이브러리 다수가 함께 들어옴.</p>
+
+    <div class="starter-grid">
+      <div class="starter-card">
+        <h4>spring-boot-starter-web</h4>
+        <p>REST API. 내장 Tomcat + Spring MVC + Jackson</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-webflux</h4>
+        <p>리액티브 웹. Netty + Reactor</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-data-jpa</h4>
+        <p>Hibernate + HikariCP + JPA</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-data-redis</h4>
+        <p>Lettuce(또는 Jedis) + Spring Data Redis</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-security</h4>
+        <p>Spring Security (filter chain)</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-validation</h4>
+        <p>jakarta.validation (@NotBlank, @Positive 등)</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-actuator</h4>
+        <p>/health, /metrics, /info 운영 엔드포인트</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-test</h4>
+        <p>JUnit 5, Mockito, AssertJ, Spring Test</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-logging</h4>
+        <p>Logback (기본 포함)</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-mail</h4>
+        <p>JavaMail + Spring Email</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-quartz</h4>
+        <p>스케줄러 (cron, 지속성)</p>
+      </div>
+      <div class="starter-card">
+        <h4>spring-boot-starter-amqp</h4>
+        <p>RabbitMQ 통합</p>
+      </div>
+    </div>
+
+    <h2 id="config"><span class="section-num">5</span> application.yml 설정</h2>
+    <p>
+      Django의 <code>settings.py</code>에 해당. 다만 <strong>YAML이 기본</strong>이고 Python 코드가 아닙니다(선언적).
+      <code>application.properties</code>(key=value 형식)도 가능하나 YAML이 가독성 우위.
+    </p>
+
+<pre><code class="language-yaml"># application.yml
+spring:
+  application:
+    name: my-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/app
+    username: ${DB_USER}            # 환경변수 참조
+    password: ${DB_PASSWORD:}       # 기본값 빈 문자열
+    hikari:
+      maximum-pool-size: 20         # HikariCP 커넥션 풀
+
+  jpa:
+    hibernate:
+      ddl-auto: validate            # validate/update/create/create-drop
+    show-sql: false
+    properties:
+      hibernate.format_sql: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+server:
+  port: 8080
+  compression:
+    enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.tnear: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger - %msg%n"
+
+# 커스텀 속성 (우리 앱의 설정)
+app:
+  weather-api-url: https://api.weather.com
+  cache-ttl-seconds: 300</code></pre>
+
+    <h3>환경변수 치환 규칙</h3>
+    <ul>
+      <li><code>${DB_USER}</code> — 환경변수, 없으면 에러</li>
+      <li><code>${DB_USER:default}</code> — 기본값 제공</li>
+      <li><code>${DB_USER:${DEFAULT_USER:admin}}</code> — 중첩 기본값</li>
+    </ul>
+
+    <h2 id="profiles"><span class="section-num">6</span> Profile (환경 분리)</h2>
+    <p>Django의 <code>settings.production</code> / <code>settings.local</code>에 해당. <strong>프로파일별 yml 파일을 자동 병합</strong>.</p>
+
+    <div class="profile-diagram">
+      <div class="profile-card dev">
+        <h4>application-dev.yml</h4>
+        <pre style="font-size: 11px; margin: 0;"><code class="language-yaml">spring:
+  datasource:
+    url: jdbc:h2:mem:dev
+logging.level.root: DEBUG</code></pre>
+      </div>
+      <div class="profile-card staging">
+        <h4>application-staging.yml</h4>
+        <pre style="font-size: 11px; margin: 0;"><code class="language-yaml">spring:
+  datasource:
+    url: jdbc:postgresql://stage-db:5432/app
+logging.level.root: INFO</code></pre>
+      </div>
+      <div class="profile-card prod">
+        <h4>application-prod.yml</h4>
+        <pre style="font-size: 11px; margin: 0;"><code class="language-yaml">spring:
+  datasource:
+    url: jdbc:postgresql://prod-db:5432/app
+logging.level.root: WARN</code></pre>
+      </div>
+    </div>
+
+    <h3>프로파일 활성 방법</h3>
+<pre><code class="language-bash"># 1. 커맨드라인
+java -jar app.jar --spring.profiles.active=prod
+
+# 2. 환경변수
+SPRING_PROFILES_ACTIVE=prod java -jar app.jar
+
+# 3. application.yml
+spring:
+  profiles:
+    active: dev
+
+# 4. gradle bootRun
+./gradlew bootRun --args='--spring.profiles.active=dev'</code></pre>
+
+    <h3>조건부 Bean (프로파일별)</h3>
+<pre><code class="language-kotlin">@Component
+@Profile("prod")  // prod 프로파일에서만 Bean으로 등록
+class SesEmailSender : EmailSender { /* ... */ }
+
+@Component
+@Profile("!prod")  // prod가 아닐 때만
+class ConsoleEmailSender : EmailSender { /* ... */ }</code></pre>
+
+    <h2 id="properties"><span class="section-num">7</span> @ConfigurationProperties</h2>
+    <p>
+      <strong>YAML 설정을 타입 안전한 Kotlin 객체로 바인딩</strong>. Django settings의 dict 접근보다 훨씬 안전.
+    </p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># Django settings.py
+WEATHER_API_URL = os.getenv("WEATHER_API_URL")
+CACHE_TTL = int(os.getenv("CACHE_TTL", "300"))
+
+# 사용
+from django.conf import settings
+settings.WEATHER_API_URL  # 오타나도 None 반환, 런타임 에러</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">// yaml
+// app:
+//   weather-api-url: https://...
+//   cache-ttl-seconds: 300
+
+@ConfigurationProperties(prefix = "app")
+data class AppProperties(
+    val weatherApiUrl: String,
+    val cacheTtlSeconds: Int = 300
+)
+
+// 등록
+@SpringBootApplication
+@EnableConfigurationProperties(AppProperties::class)
+class App
+
+// 사용 (DI)
+@Service
+class WeatherService(private val props: AppProperties) {
+    fun fetch() = httpClient.get(props.weatherApiUrl)
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">@Validated로 부팅 시 검증</div>
+<pre><code class="language-kotlin">@Validated
+@ConfigurationProperties(prefix = "bot")
+data class BotProperties(
+    @field:NotEmpty val contracts: List&lt;String&gt; = listOf("BTC_USDT"),
+    @field:Positive val leverage: Int = 5,
+    @field:Positive val orderSize: Int = 1,
+    @field:Positive val checkIntervalSec: Long = 60
+)
+// 잘못된 값으로 부팅 시도시 BindException으로 앱 시작 실패 (fail-fast)</code></pre>
+    </div>
+
+    <h2 id="lifecycle"><span class="section-num">8</span> 앱 라이프사이클</h2>
+    <p>Spring Boot 앱의 시작/종료 흐름과 훅 포인트.</p>
+
+<pre><code class="language-kotlin">// 1. @PostConstruct: Bean 생성 직후 1회
+@Component
+class MyBean {
+    @PostConstruct
+    fun init() { /* ... */ }
+}
+
+// 2. ApplicationRunner / CommandLineRunner: 앱 완전 시작 후 1회
+@Component
+class StartupRunner : ApplicationRunner {
+    override fun run(args: ApplicationArguments) {
+        // args.getOptionValues("name"), args.containsOption("verbose")
+    }
+}
+
+// 3. @EventListener: 특정 이벤트 발생시
+@Component
+class Listener {
+    @EventListener(ApplicationReadyEvent::class)
+    fun onReady() { /* 웹 서버까지 떴을 때 */ }
+
+    @EventListener(ContextClosedEvent::class)
+    fun onClose() { /* 종료 시작 */ }
+}
+
+// 4. @PreDestroy: Bean 소멸 직전
+@Component
+class MyBean {
+    @PreDestroy
+    fun cleanup() { /* 리소스 정리 */ }
+}
+
+// 이벤트 순서:
+// ContextRefreshed → @PostConstruct 완료 →
+// ApplicationStarted → ApplicationRunner →
+// ApplicationReady → (서비스 중) →
+// ContextClosed → @PreDestroy</code></pre>
+
+    <h2 id="actuator"><span class="section-num">9</span> Actuator (운영 엔드포인트)</h2>
+    <p>
+      의존성 하나 추가하면 <strong>운영에 필요한 엔드포인트</strong>가 자동 제공. Django에는 없는 기능으로 직접 만들어야 하는 것들.
+    </p>
+
+<pre><code class="language-yaml"># build.gradle.kts: implementation("org.springframework.boot:spring-boot-starter-actuator")
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true</code></pre>
+
+    <p>제공되는 주요 엔드포인트:</p>
+    <ul>
+      <li><code>/actuator/health</code> — 앱 상태 (DB/Redis 연결 체크 포함)</li>
+      <li><code>/actuator/info</code> — 앱 정보(버전, 빌드 시간)</li>
+      <li><code>/actuator/metrics</code> — Micrometer 메트릭 (JVM, HTTP, 커스텀)</li>
+      <li><code>/actuator/prometheus</code> — Prometheus 스크래핑용</li>
+      <li><code>/actuator/loggers</code> — 런타임 로그 레벨 변경</li>
+      <li><code>/actuator/threaddump</code>, <code>/actuator/heapdump</code> — 디버깅</li>
+    </ul>
+
+    <h2 id="structure"><span class="section-num">10</span> 프로젝트 구조 (관례)</h2>
+    <p>강제는 아니지만 대부분 이 구조를 따릅니다 (계층형):</p>
+
+<pre><code>src/
+├── main/
+│   ├── kotlin/com/tnear/weather/
+│   │   ├── WeatherApplication.kt     # @SpringBootApplication 진입점
+│   │   ├── config/                   # @Configuration, @ConfigurationProperties
+│   │   ├── controller/               # @RestController
+│   │   ├── service/                  # @Service (비즈니스 로직)
+│   │   ├── domain/                   # @Entity / data class (도메인 모델)
+│   │   ├── repository/               # JpaRepository 인터페이스
+│   │   ├── dto/                      # 요청/응답 DTO
+│   │   └── exception/                # 커스텀 예외 + @ControllerAdvice
+│   └── resources/
+│       ├── application.yml
+│       ├── application-dev.yml       # .gitignore 대상
+│       ├── application-prod.yml
+│       ├── static/                   # 정적 파일
+│       ├── templates/                # Thymeleaf 등
+│       └── db/migration/             # Flyway 스키마 (V1__init.sql 등)
+└── test/
+    ├── kotlin/com/tnear/weather/
+    │   └── ... (프로덕션과 미러링)
+    └── resources/
+        └── application-test.yml</code></pre>
+
+    <div class="box box-info">
+      <div class="box-title">계층형 vs 도메인형 구조</div>
+      <p>
+        위는 <strong>계층형</strong>(controller/service/repository). 프로젝트가 커지면 <strong>도메인형</strong>으로 전환:
+      </p>
+<pre><code>com.tnear/
+├── user/
+│   ├── UserController.kt
+│   ├── UserService.kt
+│   ├── User.kt (Entity)
+│   └── UserRepository.kt
+├── ads/
+│   ├── AdsController.kt
+│   ├── ...
+└── common/</code></pre>
+      <p style="margin: 8px 0 0; font-size: 13px;">
+        기능 변경시 관련 파일이 한 패키지에 모여 있어 수정 범위가 명확. 큰 팀/MSA에 유리.
+      </p>
+    </div>
+
+    <h2 id="project"><span class="section-num">11</span> gate-futures-bot 적용 예</h2>
+
+    <h3>진입점</h3>
+    <span class="file-ref">src/main/kotlin/.../GateFuturesBotApplication.kt</span>
+<pre><code class="language-kotlin">@SpringBootApplication
+@EnableConfigurationProperties(
+    ApiProperties::class,
+    BotProperties::class,
+    StrategyProperties::class
+)
+class GateFuturesBotApplication
+
+fun main(args: Array&lt;String&gt;) {
+    runApplication&lt;GateFuturesBotApplication&gt;(*args)
+}</code></pre>
+
+    <h3>설정 바인딩</h3>
+    <span class="file-ref">src/main/kotlin/.../config/BotProperties.kt</span>
+<pre><code class="language-kotlin">@Validated
+@ConfigurationProperties(prefix = "bot")
+data class BotProperties(
+    @field:NotEmpty val contracts: List&lt;String&gt; = listOf("BTC_USDT"),
+    @field:Positive val leverage: Int = 5,
+    @field:Positive val orderSize: Int = 1,
+    @field:Positive val checkIntervalSec: Long = 60
+)</code></pre>
+
+    <h3>ApplicationReadyEvent 훅</h3>
+    <span class="file-ref">src/main/kotlin/.../worker/BotRunner.kt</span>
+<pre><code class="language-kotlin">@Component
+class BotRunner(
+    private val orchestrator: WorkerOrchestrator,
+    private val assembler: StrategyAssembler,
+    /* ... */
+) {
+    @EventListener(ApplicationReadyEvent::class)
+    fun start() {
+        // 앱이 완전 시작된 시점에 코루틴 워커 launch
+    }
+
+    @PreDestroy
+    fun stop() { /* graceful shutdown */ }
+}</code></pre>
+
+    <h3>프로파일 분리</h3>
+<pre><code class="language-bash">src/main/resources/
+├── application.yml               # 공통 (git-tracked)
+└── application-dev.yml.example   # 예시 템플릿 (git-tracked)
+
+.gitignore:
+src/main/resources/application-dev.yml   # 실제 API 키 — 제외
+src/main/resources/application-prod.yml
+
+# 실행
+./gradlew bootRun --args='--spring.profiles.active=dev'</code></pre>
+
+    <h2 id="interview"><span class="section-num">12</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. Spring Boot의 Auto-configuration 원리는?</div>
+      <div class="a">
+        A. <code>@EnableAutoConfiguration</code>이 <code>spring.factories</code>(Spring Boot 2.x) 또는 <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>(3.x) 파일에 나열된 AutoConfiguration 클래스들을 로드합니다. 각 클래스는 <code>@ConditionalOnClass</code>, <code>@ConditionalOnMissingBean</code>, <code>@ConditionalOnProperty</code> 등의 조건부 어노테이션을 통해 <strong>classpath와 기존 Bean 상태</strong>를 확인하고 조건이 맞을 때만 Bean을 등록합니다. 사용자가 직접 Bean을 정의하면 자동 설정은 skip되어 커스터마이즈 가능.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>@Component</code>와 <code>@Service</code>, <code>@Repository</code>의 차이는?</div>
+      <div class="a">
+        A. <strong>기능상 동일</strong>합니다 — 모두 컴포넌트 스캔 대상. 차이는 <strong>의도 표현</strong>과 특수 기능:
+        <code>@Service</code>는 비즈니스 로직, <code>@Repository</code>는 데이터 접근 계층, <code>@Controller</code>/<code>@RestController</code>는 웹 계층.
+        <code>@Repository</code>는 특별히 <strong>JDBC/JPA 예외를 <code>DataAccessException</code>으로 변환</strong>하는 추가 기능이 있습니다.
+        의도를 명확히 하면 팀원이 책임을 한눈에 파악하기 좋습니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Profile을 어떻게 설계하시나요?</div>
+      <div class="a">
+        A. 3~4개 정도로 단순화합니다: <code>local</code>(개발자 PC, H2/embedded), <code>dev</code>(공유 개발 서버), <code>staging</code>(QA), <code>prod</code>.
+        공통 설정은 <code>application.yml</code>, 환경별은 <code>application-{profile}.yml</code>로 override.
+        <strong>민감 정보</strong>(API 키, DB 비밀번호)는 yml에 하드코딩하지 않고 환경변수(<code>${DB_PASSWORD}</code>)나 AWS Secrets Manager/Parameter Store에서 주입.
+        profile-specific Bean은 <code>@Profile("prod")</code>로 대체 구현 제공(예: 실제 이메일 vs 로그 출력).
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>application.yml</code>과 <code>@ConfigurationProperties</code> 중 <code>@Value</code>는 언제 쓰나요?</div>
+      <div class="a">
+        A. <code>@Value("${app.name}")</code>은 <strong>단일 값 주입</strong>용 — 간단한 한두 개 설정에 쓰면 됩니다. 하지만 <strong>여러 속성을 그룹화</strong>하거나 <strong>계층적 설정</strong>을 다룰 땐 <code>@ConfigurationProperties</code>가 유리합니다. 이유:
+        ① 타입 안전(String → Int 변환 명시),
+        ② 기본값을 Kotlin data class에 표현,
+        ③ <code>@Validated</code>로 부팅 시 검증,
+        ④ IDE가 yml 편집 시 자동완성 제공(spring-boot-configuration-processor).
+        실무에선 <code>@Value</code>는 자주 변하는 디버깅 플래그 정도에만 쓰고 대부분 <code>@ConfigurationProperties</code>.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Spring과 Spring Boot의 차이는?</div>
+      <div class="a">
+        A. <strong>Spring Framework</strong>(2003년~)는 DI 컨테이너 + 모듈 집합. 강력하지만 XML 설정이 복잡하고 서버(WAS) 별도 설치 필요.
+        <strong>Spring Boot</strong>(2014년~)는 Spring 위에 올린 <strong>opinionated wrapper</strong>. ①Auto-configuration으로 설정 최소화, ②내장 Tomcat으로 <code>java -jar</code> 실행, ③Starter로 의존성 조합 단순화.
+        <strong>Spring Boot는 Spring을 대체한 게 아니라 사용하기 쉽게 포장</strong>한 것. 내부는 여전히 Spring Framework.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li>Django "all-in-one" vs Spring Boot "조합형 Starter"</li>
+        <li><code>@SpringBootApplication</code> = Configuration + AutoConfig + ComponentScan</li>
+        <li><strong>Auto-configuration</strong>은 classpath + 조건부 Bean으로 동작</li>
+        <li>설정은 <code>application.yml</code> + <code>@ConfigurationProperties</code> (타입 안전)</li>
+        <li>Profile로 환경 분리 (dev/staging/prod)</li>
+        <li>라이프사이클 훅: <code>@PostConstruct</code> / <code>ApplicationRunner</code> / <code>@EventListener(ApplicationReadyEvent)</code> / <code>@PreDestroy</code></li>
+        <li><strong>Actuator</strong>로 운영 엔드포인트 자동 제공</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="07-gradle.html">&larr; 이전: Gradle</a>
+      <a href="09-spring-di-beans.html">다음: DI와 Bean &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

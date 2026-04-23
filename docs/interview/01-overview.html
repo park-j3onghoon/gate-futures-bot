@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>01 - 왜 Kotlin + Spring인가 | Python → Kotlin 전환 가이드</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .compare-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
+    .compare-card { padding: 20px; border-radius: 12px; border: 2px solid transparent; }
+    .compare-card.python { background: #ecfdf5; border-color: #10b981; }
+    .compare-card.kotlin { background: #eff6ff; border-color: #3b82f6; }
+    .compare-card h4 { margin: 0 0 12px 0; font-size: 15px; }
+    .compare-card.python h4 { color: #059669; }
+    .compare-card.kotlin h4 { color: #2563eb; }
+    .compare-card ul { margin: 0; padding-left: 20px; font-size: 14px; }
+
+    .layer-diagram {
+      display: flex; flex-direction: column; gap: 2px; margin: 24px 0;
+      border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;
+    }
+    .layer {
+      padding: 14px 20px; font-size: 14px; font-weight: 600; color: white;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .layer .sub { font-size: 12px; opacity: 0.85; font-weight: 400; }
+    .layer-app { background: #7c3aed; }
+    .layer-fw { background: #2563eb; }
+    .layer-lang { background: #0891b2; }
+    .layer-runtime { background: #059669; }
+    .layer-os { background: #6b7280; }
+
+    .perf-bar {
+      background: #f3f4f6; border-radius: 4px; height: 24px; margin: 4px 0 12px 0;
+      position: relative; overflow: hidden;
+    }
+    .perf-bar .fill {
+      height: 100%; display: flex; align-items: center; padding: 0 8px;
+      color: white; font-size: 12px; font-weight: 600;
+    }
+    .perf-py { background: #10b981; width: 30%; }
+    .perf-kt { background: #3b82f6; width: 100%; }
+    .perf-go { background: #06b6d4; width: 110%; }
+
+    .market-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0;
+    }
+    .market-cell {
+      padding: 14px; background: #f9fafb; border-radius: 8px; text-align: center;
+      border-top: 3px solid #7c3aed;
+    }
+    .market-cell b { display: block; font-size: 18px; margin-bottom: 4px; }
+    .market-cell span { font-size: 12px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>01 - 왜 Kotlin + Spring인가</h1>
+      <p class="subtitle">Python 개발자가 JVM 세계로 넘어오는 이유</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#mental-model">멘탈 모델: Python과 근본적으로 다른 세 가지</a></li>
+        <li><a href="#jvm">JVM이란 무엇인가</a></li>
+        <li><a href="#kotlin">Kotlin은 Java와 무엇이 다른가</a></li>
+        <li><a href="#spring">Spring이란 무엇인가 (Django와의 차이)</a></li>
+        <li><a href="#why-enterprise">엔터프라이즈에서 이 조합이 지배적인 이유</a></li>
+        <li><a href="#mindset">마인드셋 전환 체크리스트</a></li>
+      </ol>
+    </div>
+
+    <h2 id="mental-model"><span class="section-num">1</span> 멘탈 모델: 근본적으로 다른 세 가지</h2>
+    <p>문법 차이보다 먼저, <strong>시스템 철학이 다르다</strong>는 점을 받아들여야 합니다.</p>
+
+    <div class="compare-cards">
+      <div class="compare-card python">
+        <h4>Python / Django</h4>
+        <ul>
+          <li><strong>동적 타입</strong> — 런타임에 타입 결정, 유연하지만 에러도 런타임</li>
+          <li><strong>인터프리터</strong> — 한 줄씩 실행, 빠른 개발 루프</li>
+          <li><strong>단일 스레드 + 이벤트 루프</strong> (asyncio, Gunicorn worker fork)</li>
+          <li><strong>"Batteries included"</strong> — Django 한 패키지가 다 함</li>
+          <li><strong>Duck typing</strong> — 인터페이스 선언 없이 "가진 메서드"로 판단</li>
+          <li><strong>pip + requirements.txt</strong></li>
+        </ul>
+      </div>
+      <div class="compare-card kotlin">
+        <h4>Kotlin / Spring</h4>
+        <ul>
+          <li><strong>정적 타입</strong> — 컴파일 타임에 타입 검증, 많은 에러를 빌드에서 차단</li>
+          <li><strong>JIT 컴파일</strong> — JVM이 바이트코드를 네이티브로 최적화 (warm-up 후 빠름)</li>
+          <li><strong>스레드 + 코루틴</strong> — 수천 스레드 동시 처리 가능</li>
+          <li><strong>조합 가능한 Starter</strong> — spring-boot-starter-web/data-jpa/... 조합</li>
+          <li><strong>인터페이스 명시</strong> — SAM, sealed로 타입 계약 강제</li>
+          <li><strong>Gradle (또는 Maven)</strong> — 빌드 시스템이자 태스크 러너</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">가장 큰 멘탈 시프트</div>
+      <p>
+        Python에선 "먼저 돌려보고 에러나면 고친다"가 일상이지만, Kotlin에선 <strong>IDE가 이미 절반의 에러를 잡아줍니다</strong>.
+        IntelliJ를 켜면 "저장 없이" 빨간 줄이 뜨고, null 경로를 빠뜨리면 컴파일 거부합니다.
+        이는 개발 초기엔 답답하지만, 대규모 시스템에선 <strong>배포 후 장애를 수십 배 줄여주는 안전망</strong>입니다.
+      </p>
+    </div>
+
+    <h2 id="jvm"><span class="section-num">2</span> JVM이란 무엇인가</h2>
+    <p>
+      <strong>JVM(Java Virtual Machine)</strong>은 바이트코드를 실행하는 가상 머신입니다.
+      Java/Kotlin/Scala/Groovy 등이 모두 JVM 바이트코드로 컴파일되어 같은 VM에서 돌아갑니다.
+      Python의 CPython 인터프리터에 해당하지만, 훨씬 정교한 최적화를 수행합니다.
+    </p>
+
+    <div class="layer-diagram">
+      <div class="layer layer-app">
+        <span>내 애플리케이션 코드 (Kotlin)</span>
+        <span class="sub">KotlinCompiler → .class (JVM bytecode)</span>
+      </div>
+      <div class="layer layer-fw">
+        <span>프레임워크 / 라이브러리 (Spring, Hibernate 등)</span>
+        <span class="sub">Maven Central에서 .jar로 배포</span>
+      </div>
+      <div class="layer layer-lang">
+        <span>Kotlin Standard Library + Java SE API</span>
+        <span class="sub">kotlin-stdlib.jar + java.base</span>
+      </div>
+      <div class="layer layer-runtime">
+        <span>JVM (JIT 컴파일러, Garbage Collector, 스레드 스케줄러)</span>
+        <span class="sub">HotSpot / OpenJDK / Temurin</span>
+      </div>
+      <div class="layer layer-os">
+        <span>Linux / macOS / Windows</span>
+        <span class="sub">네이티브 OS</span>
+      </div>
+    </div>
+
+    <h3>JVM의 핵심 기능 3가지</h3>
+    <ol>
+      <li><strong>JIT 컴파일</strong>: 자주 실행되는 코드를 런타임에 네이티브 기계어로 컴파일 → Python보다 10~100배 빠름</li>
+      <li><strong>Garbage Collector</strong>: 자동 메모리 관리. G1GC, ZGC 등 선택 가능 (대부분 기본값 OK)</li>
+      <li><strong>스레드</strong>: OS 스레드를 직접 사용. 수천 개도 가능하지만, Kotlin Coroutines가 더 가볍다</li>
+    </ol>
+
+    <h3>Python vs JVM 성능 직관</h3>
+    <p>동일 로직의 상대 성능 (대략):</p>
+    <div>
+      <div style="font-size: 13px; color: #6b7280;">Python (CPython)</div>
+      <div class="perf-bar"><div class="fill perf-py">1x (기준)</div></div>
+      <div style="font-size: 13px; color: #6b7280;">Kotlin/JVM (JIT warm-up 후)</div>
+      <div class="perf-bar"><div class="fill perf-kt">~30x</div></div>
+      <div style="font-size: 13px; color: #6b7280;">Go</div>
+      <div class="perf-bar"><div class="fill perf-go">~35x</div></div>
+    </div>
+    <p style="font-size: 13px; color: #6b7280;">
+      * 순수 CPU 바운드 기준. IO 바운드(DB/HTTP)에선 의미 없음. 단, JVM은 메모리 오버헤드가 큰 편.
+    </p>
+
+    <h2 id="kotlin"><span class="section-num">3</span> Kotlin은 Java와 무엇이 다른가</h2>
+    <p>
+      Kotlin은 JetBrains가 만든 <strong>Java의 현대화 버전</strong>입니다. 2017년 Google이 Android 공식 언어로 채택하면서 폭발적 성장.
+      Java 바이트코드로 컴파일되기 때문에 <strong>Java 라이브러리를 100% 사용 가능</strong>합니다. Spring, Hibernate, Jackson 등 기존 Java 생태계를 그대로 쓸 수 있는 게 최대 강점.
+    </p>
+
+    <div class="compare-cards">
+      <div class="compare-card python">
+        <h4>Java 코드 (Verbose)</h4>
+<pre style="margin: 0;"><code class="language-java">public class User {
+  private final Long id;
+  private final String name;
+
+  public User(Long id, String name) {
+    this.id = id;
+    this.name = name;
+  }
+  public Long getId() { return id; }
+  public String getName() { return name; }
+  public boolean equals(Object o) { /* ... */ }
+  public int hashCode() { /* ... */ }
+  public String toString() { /* ... */ }
+}</code></pre>
+      </div>
+      <div class="compare-card kotlin">
+        <h4>Kotlin (같은 의미, 1줄)</h4>
+<pre style="margin: 0;"><code class="language-kotlin">data class User(
+    val id: Long,
+    val name: String
+)
+// getters/equals/hashCode/toString/copy 자동 생성</code></pre>
+      </div>
+    </div>
+
+    <h3>Kotlin이 Java 대비 제공하는 핵심 개선</h3>
+    <ul>
+      <li><strong>Null safety</strong>: <code>String?</code> (nullable) vs <code>String</code> (non-null)을 타입으로 구분. NPE를 컴파일 타임에 차단</li>
+      <li><strong>data class</strong>: equals/hashCode/toString/copy 자동 생성 (Python dataclass와 동일 철학)</li>
+      <li><strong>확장 함수</strong>: 기존 클래스에 메서드 추가 가능. <code>"hello".capitalize()</code>처럼</li>
+      <li><strong>코루틴</strong>: async/await보다 강력한 구조화 동시성</li>
+      <li><strong>sealed class</strong>: 닫힌 클래스 계층, <code>when</code>의 exhaustive 검사</li>
+      <li><strong>스마트 캐스트</strong>: <code>if (x is String) x.length</code>처럼 자동 타입 좁힘</li>
+      <li><strong>Named/Default 파라미터</strong>: Python처럼 <code>fun greet(name: String, lang: String = "ko")</code></li>
+    </ul>
+
+    <h2 id="spring"><span class="section-num">4</span> Spring이란 무엇인가</h2>
+    <p>
+      Spring은 <strong>Java/Kotlin 생태계의 "플랫폼"</strong>입니다. 단일 프레임워크가 아니라 수십 개의 모듈 집합:
+      <strong>Spring Framework</strong>(코어 DI), <strong>Spring Boot</strong>(빠른 시작), <strong>Spring Data</strong>(DB 접근), <strong>Spring Security</strong>(인증/인가), <strong>Spring Cloud</strong>(MSA 지원) 등.
+    </p>
+
+    <div class="compare-cards">
+      <div class="compare-card python">
+        <h4>Django 철학</h4>
+        <p style="margin: 0; font-size: 14px;">
+          "Batteries included": <strong>한 패키지에 모든 것</strong>이 들어있음.
+          ORM, 템플릿, 인증, 관리자 페이지, 폼, 미들웨어, URL 라우팅 모두 Django 하나에.
+          관례(convention)가 강해 프로젝트 구조가 대체로 동일.
+        </p>
+      </div>
+      <div class="compare-card kotlin">
+        <h4>Spring Boot 철학</h4>
+        <p style="margin: 0; font-size: 14px;">
+          "조합 가능한 Starter": <strong>필요한 것만 골라서</strong> 의존성에 추가.
+          <code>spring-boot-starter-web</code> (REST) + <code>spring-boot-starter-data-jpa</code> (ORM) + <code>spring-boot-starter-security</code> (인증)...
+          각 Starter가 <strong>Auto-configuration</strong>으로 기본 설정 자동 주입.
+        </p>
+      </div>
+    </div>
+
+    <h3>Spring Boot = Spring Framework + Auto-Configuration + Embedded Server</h3>
+    <p>
+      Spring Framework는 DI 컨테이너 + 여러 모듈의 집합으로 10년 넘게 쓰여왔지만 <strong>XML/설정이 복잡</strong>했습니다.
+      Spring Boot(2014년~)는 "관례로 80%를 해결"하는 <strong>Opinionated 래퍼</strong>:
+    </p>
+    <ul>
+      <li>내장 Tomcat/Jetty 포함 → <code>java -jar app.jar</code> 한 줄로 실행 (별도 WAS 불필요)</li>
+      <li>application.yml 한 파일로 설정 → XML 지옥 탈출</li>
+      <li>Classpath에 H2가 있으면 자동으로 in-memory DB 설정 같은 마법</li>
+      <li>Actuator 하나 추가하면 /health, /metrics 엔드포인트 자동 제공</li>
+    </ul>
+
+    <h2 id="why-enterprise"><span class="section-num">5</span> 엔터프라이즈에서 이 조합이 지배적인 이유</h2>
+
+    <div class="market-grid">
+      <div class="market-cell">
+        <b>#1</b>
+        <span>엔터프라이즈 백엔드<br>Java/Kotlin + Spring</span>
+      </div>
+      <div class="market-cell">
+        <b>20+년</b>
+        <span>Spring 프레임워크<br>생태계 성숙도</span>
+      </div>
+      <div class="market-cell">
+        <b>수천 개</b>
+        <span>Spring/Kotlin 채용공고<br>(국내 기준 최다)</span>
+      </div>
+    </div>
+
+    <ol>
+      <li><strong>타입 안전성</strong>: 대규모 팀에서 수백만 줄 코드베이스를 관리하려면 정적 타입이 사실상 필수</li>
+      <li><strong>생태계</strong>: DB 커넥션 풀(HikariCP), 캐시(Caffeine), 메시지 큐(Kafka client), 모니터링(Micrometer) 전부 성숙</li>
+      <li><strong>JVM 성능</strong>: 높은 처리량 + 예측 가능한 GC. 대량 트래픽 서비스에 검증됨</li>
+      <li><strong>운영 도구</strong>: APM(DataDog, New Relic), 프로파일링(async-profiler), 스레드 덤프 분석 도구 성숙</li>
+      <li><strong>인력 수급</strong>: 시니어 Java/Kotlin 개발자 풀이 Python 대비 크다 (국내 기업)</li>
+      <li><strong>Spring Cloud</strong>: MSA(MicroService Architecture) 표준 도구 (Netflix OSS 계승)</li>
+    </ol>
+
+    <div class="box box-info">
+      <div class="box-title">국내 대표 Kotlin/Spring 사용처</div>
+      <p>
+        토스, 카카오, 쿠팡, 배달의민족(우아한형제들), 네이버, 라인, 당근마켓, 야놀자, 직방, 리디, 마켓컬리…
+        "규모 있는 한국 서비스"의 절반 이상이 이 스택입니다. 티니어처럼 <strong>글로벌 다운로드 6천만 규모</strong>도 동일.
+      </p>
+    </div>
+
+    <h2 id="mindset"><span class="section-num">6</span> 마인드셋 전환 체크리스트</h2>
+    <p>Python에서 넘어올 때 자주 겪는 "당황 포인트"를 미리 짚습니다.</p>
+
+    <table>
+      <thead><tr><th>Python 습관</th><th>Kotlin에서는</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>def f(x): return x * 2</code></td>
+          <td>파라미터/리턴 타입 명시: <code>fun f(x: Int): Int = x * 2</code></td>
+        </tr>
+        <tr>
+          <td><code>None</code>을 아무 곳에서나 리턴</td>
+          <td><code>?</code>로 명시: <code>String?</code>. 체크 없이 사용 불가</td>
+        </tr>
+        <tr>
+          <td><code>try / except</code> 후 <code>pass</code></td>
+          <td>예외 삼키면 경고. sealed Exception + 의도 명시</td>
+        </tr>
+        <tr>
+          <td><code>__init__.py</code>, <code>settings.py</code>가 중심</td>
+          <td><code>Application.kt</code> (@SpringBootApplication) + <code>application.yml</code></td>
+        </tr>
+        <tr>
+          <td>핫 리로드 (uvicorn --reload)</td>
+          <td>Spring DevTools 있지만 컴파일 단계 필요. 평균 리빌드 2~10초</td>
+        </tr>
+        <tr>
+          <td>모듈 함수 그대로 import해서 씀</td>
+          <td>"Spring Bean"으로 등록 후 DI. 함수 import 자유도는 낮음</td>
+        </tr>
+        <tr>
+          <td><code>os.environ.get("X")</code></td>
+          <td><code>@ConfigurationProperties</code> + application.yml + 환경변수</td>
+        </tr>
+        <tr>
+          <td>pytest, 모듈 단위 자유롭게</td>
+          <td>JUnit 5 + MockK. 클래스 기반. <code>@SpringBootTest</code>로 통합 테스트</td>
+        </tr>
+        <tr>
+          <td><code>asyncio.gather</code></td>
+          <td><code>coroutineScope { async { ... }.awaitAll() }</code></td>
+        </tr>
+        <tr>
+          <td>ORM: 모델 클래스에 모든 로직</td>
+          <td>JPA Entity는 DB 매핑만, 비즈니스 로직은 Service에 (DDD 영향)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li>Kotlin ≒ "현대화된 Java" + Python의 좋은 점 일부(null safety, data class 등)</li>
+        <li>Spring Boot ≒ "조합 가능한 Django" (필요한 Starter만 취합, Auto-configuration)</li>
+        <li>정적 타입 + JVM 최적화 = 대규모 시스템에 강한 조합</li>
+        <li>Python의 빠른 실행 vs JVM의 실행 속도 + 운영 안정성 트레이드오프</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="index.html">&larr; 목차로</a>
+      <a href="02-kotlin-basics.html">다음: Kotlin 기초 문법 &rarr;</a>
+    </nav>
+
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-java.min.js"></script>
+</body>
+</html>

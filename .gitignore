@@ -45,3 +45,6 @@ src/main/resources/application-prod.yml
 
 ### OS ###
 .DS_Store
+
+# 기능 수동 생성 산출물
+docs/interview.zip

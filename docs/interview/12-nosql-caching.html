@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>12 - NoSQL · 캐싱 | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-anti { border-left: 4px solid #ef4444; background: #fef2f2; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .box-anti .box-title { color: #dc2626; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+
+    .strategy-diagram {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0;
+    }
+    .strategy-card { padding: 20px; border-radius: 12px; border: 2px solid; }
+    .strategy-card.read { background: #eff6ff; border-color: #3b82f6; }
+    .strategy-card.write { background: #fef3c7; border-color: #f59e0b; }
+    .strategy-card h4 { margin: 0 0 12px 0; }
+    .step-list { list-style: none; padding: 0; margin: 0; }
+    .step-list li { padding: 8px 12px; background: white; margin: 4px 0; border-radius: 6px; font-size: 13px; }
+
+    .db-choice {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0;
+    }
+    .db-card {
+      padding: 18px; border-radius: 12px; border-top: 4px solid;
+      background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .db-card.rdb { border-top-color: #3b82f6; }
+    .db-card.redis { border-top-color: #ef4444; }
+    .db-card.mongo { border-top-color: #10b981; }
+    .db-card h4 { margin: 0 0 10px 0; }
+    .db-card .usecase { font-size: 13px; color: #374151; line-height: 1.6; }
+
+    .cache-flow {
+      display: flex; align-items: center; gap: 12px; justify-content: center;
+      padding: 20px; background: #f9fafb; border-radius: 10px; margin: 16px 0;
+      flex-wrap: wrap;
+    }
+    .cache-box {
+      padding: 10px 16px; background: white; border: 2px solid #3b82f6;
+      border-radius: 8px; font-family: monospace; font-size: 13px;
+    }
+    .cache-arrow { color: #6b7280; font-size: 18px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>12 - NoSQL · 캐싱</h1>
+      <p class="subtitle">Redis/MongoDB + 캐싱 전략</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#overview">언제 무엇을 쓰나 (RDB/Redis/Mongo)</a></li>
+        <li><a href="#why-cache">왜 캐싱인가</a></li>
+        <li><a href="#redis-setup">Spring Data Redis 설정</a></li>
+        <li><a href="#redis-template">RedisTemplate 사용법</a></li>
+        <li><a href="#cacheable">@Cacheable 추상화</a></li>
+        <li><a href="#cache-strategies">캐싱 전략 3가지</a></li>
+        <li><a href="#invalidation">캐시 무효화</a></li>
+        <li><a href="#pitfalls">캐시 함정</a></li>
+        <li><a href="#mongodb">Spring Data MongoDB</a></li>
+        <li><a href="#session">세션/사용자 상태 관리</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="overview"><span class="section-num">1</span> 언제 무엇을 쓰나</h2>
+    <p>채용공고의 <strong>"RDBMS 및 NoSQL 데이터 모델링 경험"</strong>은 각 저장소의 특성을 이해하고 선택할 수 있는지를 봅니다.</p>
+
+    <div class="db-choice">
+      <div class="db-card rdb">
+        <h4>PostgreSQL (RDB)</h4>
+        <div class="usecase">
+          <strong>트랜잭션 + 관계</strong><br>
+          사용자, 주문, 결제, 정산.<br>
+          ACID 필수, JOIN 많음, 스키마 엄격.<br>
+          <em>예: users, orders, payments</em>
+        </div>
+      </div>
+      <div class="db-card redis">
+        <h4>Redis (Key-Value)</h4>
+        <div class="usecase">
+          <strong>캐시 + 실시간 카운터 + 큐</strong><br>
+          세션, 캐시, 랭킹, 분산 락, pub/sub.<br>
+          인메모리 + TTL + 빠른 R/W.<br>
+          <em>예: session:xxx, cache:user:42</em>
+        </div>
+      </div>
+      <div class="db-card mongo">
+        <h4>MongoDB (Document)</h4>
+        <div class="usecase">
+          <strong>유연한 스키마 + 중첩</strong><br>
+          상품 카탈로그, 로그/이벤트, 사용자 프로필(복잡).<br>
+          JSON 그대로 저장, 스키마 진화 자유.<br>
+          <em>예: product 문서에 스펙 중첩</em>
+        </div>
+      </div>
+    </div>
+
+    <h3>선택 가이드</h3>
+    <table>
+      <thead><tr><th>요구사항</th><th>1순위</th><th>대안</th></tr></thead>
+      <tbody>
+        <tr><td>ACID 트랜잭션 필요</td><td>RDB (PostgreSQL)</td><td>MongoDB(4.0+ multi-doc tx 제한적)</td></tr>
+        <tr><td>JOIN이 빈번</td><td>RDB</td><td>-</td></tr>
+        <tr><td>TPS 수만+ 캐시</td><td>Redis</td><td>로컬 캐시(Caffeine)</td></tr>
+        <tr><td>TTL 기반 임시 데이터</td><td>Redis</td><td>RDB + 배치 정리</td></tr>
+        <tr><td>Rate limit / 카운터</td><td>Redis (INCR)</td><td>RDB row lock (느림)</td></tr>
+        <tr><td>분산 락</td><td>Redis (Redlock)</td><td>ZooKeeper, DB row lock</td></tr>
+        <tr><td>pub/sub 메시징</td><td>Redis / Kafka</td><td>RabbitMQ</td></tr>
+        <tr><td>로그/이벤트 저장</td><td>MongoDB / ClickHouse</td><td>RDB (파티셔닝)</td></tr>
+        <tr><td>스키마가 자주 변함</td><td>MongoDB</td><td>RDB + JSON 컬럼</td></tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">실무 관용: "RDB 기본 + Redis 캐시 + 특수 목적 Mongo"</div>
+      <p>
+        대부분의 서비스는 <strong>PostgreSQL로 시작</strong>하고, 캐시가 필요하면 <strong>Redis</strong>를 추가합니다.
+        MongoDB는 "스키마가 진짜 유연해야 하는 특수 영역"(광고 설정, 사용자별 feature flag 등)에만.
+        티니어 같은 글로벌 앱도 <strong>핵심 데이터는 RDB + Redis 캐시</strong> 조합.
+      </p>
+    </div>
+
+    <h2 id="why-cache"><span class="section-num">2</span> 왜 캐싱인가</h2>
+    <p>
+      DB 쿼리는 평균 수 ms, Redis GET은 1ms 미만. 많이 읽히는 데이터를 Redis에 두면 <strong>DB 부하를 10~100배 감소</strong>시킬 수 있습니다.
+    </p>
+
+    <div class="cache-flow">
+      <div class="cache-box">Client</div>
+      <span class="cache-arrow">→</span>
+      <div class="cache-box">API Server</div>
+      <span class="cache-arrow">→</span>
+      <div class="cache-box" style="border-color: #ef4444;">Redis (1ms)</div>
+      <span class="cache-arrow">miss →</span>
+      <div class="cache-box" style="border-color: #3b82f6;">PostgreSQL (20ms)</div>
+    </div>
+
+    <h3>캐싱이 유리한 데이터</h3>
+    <ul>
+      <li><strong>읽기 >> 쓰기</strong>: 상품 정보, 카테고리, 설정값</li>
+      <li><strong>TTL 허용</strong>: 수 초~수 분 지연 OK인 데이터</li>
+      <li><strong>재계산 비용 큼</strong>: 복잡한 집계, 외부 API 응답</li>
+      <li><strong>동일 응답 반복</strong>: 로그인 사용자 정보, 권한</li>
+    </ul>
+
+    <h3>캐싱 부적합</h3>
+    <ul>
+      <li>실시간 정확성 필수 (잔고, 재고 최종 확인)</li>
+      <li>쓰기가 읽기만큼 많음 (→ 무효화 비용)</li>
+      <li>사용자별 고유 데이터 + 1회 조회 (캐시 히트율 낮음)</li>
+    </ul>
+
+    <h2 id="redis-setup"><span class="section-num">3</span> Spring Data Redis 설정</h2>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    // 기본 클라이언트는 Lettuce (non-blocking, 권장)
+    // Jedis 쓰려면:
+    // implementation("redis.clients:jedis")
+}</code></pre>
+
+<pre><code class="language-yaml"># application.yml
+spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 2</code></pre>
+
+    <h3>RedisTemplate Bean 설정</h3>
+<pre><code class="language-kotlin">@Configuration
+class RedisConfig {
+    @Bean
+    fun redisTemplate(
+        connectionFactory: RedisConnectionFactory,
+        objectMapper: ObjectMapper
+    ): RedisTemplate&lt;String, Any&gt; {
+        val template = RedisTemplate&lt;String, Any&gt;()
+        template.connectionFactory = connectionFactory
+        template.keySerializer = StringRedisSerializer()
+        template.hashKeySerializer = StringRedisSerializer()
+
+        // JSON 직렬화 (권장)
+        val jsonSerializer = GenericJackson2JsonRedisSerializer(objectMapper)
+        template.valueSerializer = jsonSerializer
+        template.hashValueSerializer = jsonSerializer
+        return template
+    }
+}</code></pre>
+
+    <h2 id="redis-template"><span class="section-num">4</span> RedisTemplate 사용법</h2>
+
+<pre><code class="language-kotlin">@Service
+class UserCacheService(
+    private val redis: RedisTemplate&lt;String, Any&gt;
+) {
+    // String 기반 간단 set/get
+    fun set(key: String, value: Any, ttl: Duration) {
+        redis.opsForValue().set(key, value, ttl)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    fun &lt;T : Any&gt; get(key: String, type: Class&lt;T&gt;): T? {
+        val raw = redis.opsForValue().get(key) ?: return null
+        // Jackson이 JSON → 객체 변환한 상태
+        return type.cast(raw)
+    }
+
+    // 카운터 (INCR)
+    fun increment(key: String): Long =
+        redis.opsForValue().increment(key) ?: 0
+
+    // Hash — 객체의 필드 각각 저장
+    fun setField(key: String, field: String, value: Any) {
+        redis.opsForHash&lt;String, Any&gt;().put(key, field, value)
+    }
+
+    // List (큐로 쓰거나 최근 N개)
+    fun pushAndTrim(key: String, value: Any, maxSize: Long) {
+        redis.opsForList().leftPush(key, value)
+        redis.opsForList().trim(key, 0, maxSize - 1)
+    }
+
+    // Set (유니크 태그 등)
+    fun addTag(key: String, tag: String) {
+        redis.opsForSet().add(key, tag)
+    }
+
+    // ZSet (랭킹, 시간 정렬)
+    fun addToRanking(key: String, member: String, score: Double) {
+        redis.opsForZSet().add(key, member, score)
+    }
+
+    fun topRanking(key: String, limit: Long): Set&lt;Any&gt; =
+        redis.opsForZSet().reverseRange(key, 0, limit - 1) ?: emptySet()
+
+    // Pub/Sub
+    fun publish(channel: String, message: Any) {
+        redis.convertAndSend(channel, message)
+    }
+
+    // 만료 + 삭제
+    fun expire(key: String, duration: Duration) = redis.expire(key, duration)
+    fun delete(key: String) = redis.delete(key)
+}</code></pre>
+
+    <h2 id="cacheable"><span class="section-num">5</span> @Cacheable 추상화 (권장)</h2>
+    <p>RedisTemplate을 직접 쓰는 대신 Spring Cache 추상화를 쓰면 코드가 깔끔해집니다.</p>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+implementation("org.springframework.boot:spring-boot-starter-cache")
+
+// Application.kt
+@SpringBootApplication
+@EnableCaching
+class Application
+
+// Cache manager 설정
+@Configuration
+class CacheConfig {
+    @Bean
+    fun cacheManager(connectionFactory: RedisConnectionFactory): CacheManager {
+        val config = RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(Duration.ofMinutes(10))
+            .serializeKeysWith(SerializationPair.fromSerializer(StringRedisSerializer()))
+            .serializeValuesWith(
+                SerializationPair.fromSerializer(GenericJackson2JsonRedisSerializer())
+            )
+        return RedisCacheManager.builder(connectionFactory)
+            .cacheDefaults(config)
+            .withCacheConfiguration("users",
+                config.entryTtl(Duration.ofMinutes(30)))  // 캐시별 TTL
+            .withCacheConfiguration("products",
+                config.entryTtl(Duration.ofHours(2)))
+            .build()
+    }
+}</code></pre>
+
+<pre><code class="language-kotlin">@Service
+class UserService(private val userRepo: UserRepository) {
+
+    // @Cacheable: 결과를 캐시. 다음 호출시 캐시 있으면 메서드 스킵
+    @Cacheable(value = ["users"], key = "#id")
+    fun getUser(id: Long): User = userRepo.findById(id).orElseThrow()
+
+    // @CachePut: 메서드는 항상 실행 + 결과를 캐시 갱신
+    @CachePut(value = ["users"], key = "#user.id")
+    fun update(user: User): User = userRepo.save(user)
+
+    // @CacheEvict: 캐시 삭제
+    @CacheEvict(value = ["users"], key = "#id")
+    fun delete(id: Long) = userRepo.deleteById(id)
+
+    // 전체 삭제
+    @CacheEvict(value = ["users"], allEntries = true)
+    fun clearAll() { }
+
+    // 조건부 캐싱
+    @Cacheable(
+        value = ["users"],
+        key = "#id",
+        condition = "#id > 0",     // 파라미터 검증
+        unless = "#result == null" // 결과 검증
+    )
+    fun findOrNull(id: Long): User? = userRepo.findById(id).orElse(null)
+
+    // 복합 키
+    @Cacheable(value = ["userSearch"], key = "#q + ':' + #page")
+    fun search(q: String, page: Int): List&lt;User&gt; = userRepo.search(q, page)
+}</code></pre>
+
+    <h2 id="cache-strategies"><span class="section-num">6</span> 캐싱 전략 3가지</h2>
+
+    <div class="strategy-diagram">
+      <div class="strategy-card read">
+        <h4>Cache-Aside (Lazy Loading)</h4>
+        <p style="font-size: 13px; margin: 0 0 10px;">가장 흔한 패턴. @Cacheable이 이 방식.</p>
+        <ol class="step-list">
+          <li>1. 캐시 조회</li>
+          <li>2. miss면 DB 조회</li>
+          <li>3. 결과를 캐시에 저장 후 반환</li>
+        </ol>
+      </div>
+      <div class="strategy-card write">
+        <h4>Write-Through</h4>
+        <p style="font-size: 13px; margin: 0 0 10px;">쓰기시 DB + 캐시 동시 갱신.</p>
+        <ol class="step-list">
+          <li>1. Client → 서버</li>
+          <li>2. 서버가 DB 저장</li>
+          <li>3. 서버가 캐시도 갱신</li>
+          <li>✓ 캐시가 항상 최신 (stale 없음)</li>
+        </ol>
+      </div>
+    </div>
+
+    <h3>Write-Behind (Write-Back)</h3>
+<pre><code class="language-kotlin">// 쓰기는 캐시에 먼저, DB 반영은 비동기로 배치
+// 장점: 쓰기 throughput 높음
+// 단점: 장애시 데이터 손실 위험
+// 대부분의 서비스엔 over-engineering. 특수 케이스만.</code></pre>
+
+    <h3>실무 기본: Cache-aside + TTL</h3>
+<pre><code class="language-kotlin">@Cacheable(value = ["products"], key = "#id")
+fun getProduct(id: Long): Product = productRepo.findById(id).orElseThrow()
+
+@CachePut(value = ["products"], key = "#product.id")
+fun updateProduct(product: Product): Product {
+    // DB 저장 → 캐시 갱신 (쓰기가 일관성 유지)
+    return productRepo.save(product)
+}
+
+@CacheEvict(value = ["products"], key = "#id")
+fun deleteProduct(id: Long) = productRepo.deleteById(id)</code></pre>
+
+    <h2 id="invalidation"><span class="section-num">7</span> 캐시 무효화</h2>
+    <p><strong>Phil Karlton: "캐시 무효화와 네이밍은 컴퓨터 과학의 2대 난제"</strong>. 전략이 필요.</p>
+
+    <h3>7.1 TTL (Time-To-Live)</h3>
+<pre><code class="language-kotlin">// Redis 자체 TTL
+redis.opsForValue().set(key, value, Duration.ofMinutes(10))
+
+// @Cacheable은 CacheManager의 기본 TTL 사용
+// 가장 단순. 데이터 신선도 vs 부하 trade-off</code></pre>
+
+    <h3>7.2 명시적 삭제 (Event-based)</h3>
+<pre><code class="language-kotlin">@Service
+class ProductService(
+    private val productRepo: ProductRepository,
+    private val cache: CacheManager
+) {
+    @Transactional
+    fun update(id: Long, req: UpdateRequest) {
+        productRepo.update(id, req)
+
+        // 관련 캐시 삭제
+        cache.getCache("products")?.evict(id)
+        cache.getCache("productList")?.clear()  // 리스트 캐시도 날림
+    }
+}</code></pre>
+
+    <h3>7.3 버전 키 (Version Key)</h3>
+<pre><code class="language-kotlin">// "products:v7:list" — 버전을 키에 포함
+// update 시 버전 증가 → 이전 키는 자동으로 외면됨 → TTL로 GC
+
+fun getProducts(): List&lt;Product&gt; {
+    val version = redis.opsForValue().get("products:version") ?: "1"
+    return cacheOrLoad("products:v$version:list") {
+        productRepo.findAll()
+    }
+}
+
+fun updateAnyProduct() {
+    productRepo.save(...)
+    redis.opsForValue().increment("products:version")  // 원자적
+}</code></pre>
+
+    <h3>7.4 Cache Tag</h3>
+<pre><code class="language-kotlin">// 관련 캐시를 태그로 묶어 한번에 무효화
+// Spring 기본 지원 없음. 직접 구현 or Redisson 같은 라이브러리</code></pre>
+
+    <h2 id="pitfalls"><span class="section-num">8</span> 캐시 함정</h2>
+
+    <div class="box-anti">
+      <div class="box-title">1. Cache Stampede (캐시 쇄도)</div>
+      <p>인기 키의 TTL 만료 순간 수많은 요청이 동시에 DB로 몰려 과부하. 해결:</p>
+<pre><code class="language-kotlin">// ① Probabilistic Early Expiration — TTL 만료 직전 일부가 미리 갱신
+// ② 분산 락 — 한 스레드만 DB 조회, 나머지는 대기
+// ③ TTL jitter — 각 키마다 TTL에 랜덤 ±10% 추가
+
+fun getWithLock(key: String): Any = redis.opsForValue().get(key) ?: run {
+    val lockKey = "lock:$key"
+    if (redis.opsForValue().setIfAbsent(lockKey, "1", Duration.ofSeconds(5)) == true) {
+        try {
+            val value = loadFromDb()
+            redis.opsForValue().set(key, value, Duration.ofMinutes(10))
+            value
+        } finally {
+            redis.delete(lockKey)
+        }
+    } else {
+        Thread.sleep(50)   // 대기 후 재조회
+        redis.opsForValue().get(key) ?: loadFromDb()
+    }
+}</code></pre>
+    </div>
+
+    <div class="box-anti">
+      <div class="box-title">2. Cache Penetration (캐시 관통)</div>
+      <p>존재하지 않는 키를 반복 조회 → DB까지 매번 도달. 해결:</p>
+      <ul>
+        <li><strong>Null 값도 짧은 TTL로 캐싱</strong>: <code>@Cacheable(unless = "#result == null")</code>을 <strong>빼면</strong> null도 저장됨</li>
+        <li><strong>Bloom filter</strong>: "이 키가 존재할 가능성" 사전 판단</li>
+      </ul>
+    </div>
+
+    <div class="box-anti">
+      <div class="box-title">3. Cache Avalanche (캐시 눈사태)</div>
+      <p>같은 시점에 대량 키가 동시 만료 → 한번에 DB로 몰림. 해결:</p>
+      <ul>
+        <li><strong>TTL에 jitter 추가</strong>: <code>TTL + random(0, 60)초</code></li>
+        <li><strong>Warm-up</strong>: 새 데이터 로드시 미리 캐시 채우기</li>
+      </ul>
+    </div>
+
+    <div class="box-anti">
+      <div class="box-title">4. Thundering Herd (@Transactional + @Cacheable 순서)</div>
+<pre><code class="language-kotlin">// ⚠️ 위험: 캐시가 먼저 업데이트되고 트랜잭션 롤백
+@Transactional
+@CachePut(value = ["users"], key = "#user.id")
+fun update(user: User): User {
+    val saved = userRepo.save(user)
+    if (failCondition) throw RuntimeException()
+    // ↑ 롤백되지만 캐시엔 이미 user 저장됨 → 불일치!
+    return saved
+}
+
+// 해결: TransactionSynchronizationManager로 커밋 후 캐시 갱신
+// 또는 캐시를 event publisher로 분리</code></pre>
+    </div>
+
+    <h2 id="mongodb"><span class="section-num">9</span> Spring Data MongoDB</h2>
+    <p>Redis처럼 Spring Data 패턴으로 Repository를 자동 생성합니다.</p>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
+
+// application.yml
+// spring.data.mongodb.uri: mongodb://localhost:27017/myapp
+
+@Document(collection = "products")
+data class Product(
+    @Id val id: String? = null,
+    val name: String,
+    val price: BigDecimal,
+
+    @Indexed
+    val category: String,
+
+    // 중첩 문서 자유
+    val specs: Map&lt;String, Any&gt;,
+    val tags: List&lt;String&gt;,
+
+    @Field("created_at")
+    val createdAt: Instant = Instant.now()
+)
+
+interface ProductRepository : MongoRepository&lt;Product, String&gt; {
+    fun findByCategory(category: String): List&lt;Product&gt;
+    fun findByPriceBetween(min: BigDecimal, max: BigDecimal): List&lt;Product&gt;
+
+    @Query("{ 'tags': { \$in: ?0 } }")
+    fun findByAnyTag(tags: List&lt;String&gt;): List&lt;Product&gt;
+
+    // Aggregation (고급)
+    @Aggregation(pipeline = [
+        "{ \$match: { 'category': ?0 } }",
+        "{ \$group: { '_id': '\$brand', 'count': { \$sum: 1 } } }"
+    ])
+    fun countByBrand(category: String): List&lt;BrandCount&gt;
+}</code></pre>
+
+    <h3>MongoTemplate (복잡한 쿼리)</h3>
+<pre><code class="language-kotlin">@Service
+class ProductService(private val mongo: MongoTemplate) {
+    fun search(criteria: SearchCriteria): List&lt;Product&gt; {
+        val query = Query()
+        criteria.name?.let { query.addCriteria(Criteria.where("name").regex(it, "i")) }
+        criteria.category?.let { query.addCriteria(Criteria.where("category").`is`(it)) }
+        criteria.maxPrice?.let { query.addCriteria(Criteria.where("price").lte(it)) }
+
+        query.with(Sort.by(Sort.Direction.DESC, "createdAt"))
+        query.limit(50)
+
+        return mongo.find(query, Product::class.java)
+    }
+}</code></pre>
+
+    <h2 id="session"><span class="section-num">10</span> 세션/사용자 상태 관리</h2>
+    <p>Spring Session을 Redis와 결합해 수평 확장이 가능한 세션 스토어 구축.</p>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+implementation("org.springframework.session:spring-session-data-redis")
+
+// application.yml
+spring:
+  session:
+    store-type: redis
+    timeout: 30m
+    redis:
+      namespace: "myapp:session"</code></pre>
+
+    <p>
+      이제 <code>HttpSession</code>에 저장한 데이터가 Redis로 자동 저장 → <strong>서버 여러 대 있어도 세션 공유</strong>.
+      로그아웃 / 세션 만료도 Redis TTL로 자동.
+    </p>
+
+    <div class="box box-tip">
+      <div class="box-title">JWT vs 세션</div>
+      <p>
+        <strong>세션 (Spring Session + Redis)</strong>: 서버가 상태 관리, 강제 로그아웃 쉬움, 요청마다 Redis lookup.<br>
+        <strong>JWT</strong>: 서버 무상태, 수평 확장 유리, 서명 검증만으로 인증. 하지만 <strong>강제 로그아웃 어려움</strong>(블랙리스트 Redis 필요).<br>
+        글로벌 서비스는 대개 <strong>JWT + refresh token + Redis 블랙리스트</strong> 조합.
+      </p>
+    </div>
+
+    <h2 id="interview"><span class="section-num">11</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. Redis를 어떻게 사용해보셨나요?</div>
+      <div class="a">
+        A. 주 용도 5가지:
+        ①<strong>캐싱</strong>: DB 조회 결과를 <code>@Cacheable</code> + TTL 10분으로 저장. 히트율 모니터링(Micrometer).
+        ②<strong>세션 스토어</strong>: Spring Session + Redis로 서버 scale-out 시 세션 공유.
+        ③<strong>레이트 리밋</strong>: <code>INCR</code> + <code>EXPIRE</code>로 "분당 N회" 제한.
+        ④<strong>분산 락</strong>: <code>SET key NX EX 5</code>로 동시 처리 방지 (Redlock).
+        ⑤<strong>실시간 랭킹</strong>: Sorted Set(ZSET)으로 top-N 빠른 조회.
+        모든 경우 <strong>키 네이밍 컨벤션</strong>(<code>{app}:{domain}:{id}</code>)과 <strong>메모리 사용량 모니터링</strong>을 병행.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 캐시 무효화 전략을 설명해주세요.</div>
+      <div class="a">
+        A. 4가지 혼합 사용:
+        ①<strong>TTL</strong>: 가장 단순. stale 허용 범위 내 설정(10분~1시간).
+        ②<strong>명시적 evict</strong>: 쓰기 시점에 <code>@CacheEvict</code>로 해당 키 삭제.
+        ③<strong>버전 키</strong>: 관련 데이터 그룹을 <code>v1:list</code> → <code>v2:list</code>로 버전 증가. 이전 키는 TTL로 자연 소멸.
+        ④<strong>이벤트 기반</strong>: DB 변경 이벤트를 pub/sub으로 전달하여 다른 서버의 로컬 캐시도 갱신.
+        실무는 주로 <strong>TTL + 명시적 evict</strong> 조합. Stampede 방지는 TTL jitter + 분산 락.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. @Cacheable의 주의사항은?</div>
+      <div class="a">
+        A. 여러 함정:
+        ①<strong>프록시 기반</strong>이라 같은 클래스 내부 메서드 호출시 캐시 적용 안 됨.
+        ②<strong>@Transactional과 순서</strong>: 캐시가 먼저 업데이트되고 트랜잭션 롤백되면 불일치. <code>@TransactionalEventListener(AFTER_COMMIT)</code>으로 커밋 후 무효화 권장.
+        ③<strong>컬렉션 반환</strong>: <code>List&lt;User&gt;</code>를 캐싱하면 전체를 통째로 저장. 각 User가 개별 업데이트되면 무효화 복잡.
+        ④<strong>null 처리</strong>: 기본적으로 null도 캐싱(Penetration 방지). 원치 않으면 <code>unless = "#result == null"</code>.
+        ⑤<strong>키 설계</strong>: 파라미터 조합이 복잡하면 SpEL이 길어짐 → 커스텀 KeyGenerator 고려.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. RDB에 JSON 컬럼이 있는데 MongoDB를 쓸 이유가 있을까요?</div>
+      <div class="a">
+        A. 경계선이 모호해집니다. PostgreSQL의 <code>JSONB</code>는 인덱싱 + 부분 업데이트를 지원해 많은 경우 Mongo를 대체합니다. MongoDB가 여전히 유리한 경우:
+        ①<strong>스키마가 심하게 heterogeneous</strong>(상품 A는 필드 10개, 상품 B는 30개).
+        ②<strong>단일 문서 내 중첩 배열</strong>이 자주 쿼리됨(Mongo의 서브 도큐먼트 인덱스가 유리).
+        ③<strong>샤딩</strong>: 수평 확장이 Mongo가 더 성숙.
+        하지만 일반 서비스는 <strong>PostgreSQL JSONB로 충분</strong>하며, 트랜잭션/조인/타입 안전이 훨씬 뛰어납니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Redis의 영속성(persistence)을 설명해주세요.</div>
+      <div class="a">
+        A. 2가지 방식:
+        ①<strong>RDB 스냅샷</strong>: 주기적으로 전체 메모리를 파일로. 복구 빠르지만 마지막 스냅샷 이후 데이터 손실 가능.
+        ②<strong>AOF (Append-Only File)</strong>: 모든 쓰기 명령을 로그로 기록. 손실 최소(fsync 설정에 따라) but 파일 크기 크고 재생 느림.
+        실무는 <strong>둘 다 활성</strong>(RDB + AOF)하되, <strong>Redis는 주요 데이터 저장소가 아니라 캐시/세션 용도</strong>로 쓰고, 장애 시엔 DB에서 다시 warm-up하는 설계가 일반적. Multi-AZ 복제(AWS ElastiCache)로 가용성 보강.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li><strong>RDB(기본)</strong> + <strong>Redis(캐시/세션/락)</strong> + 특수 <strong>Mongo</strong>(유연 스키마)</li>
+        <li>Spring Data Redis: <code>RedisTemplate</code>(저수준) / <code>@Cacheable</code>(추상화)</li>
+        <li>캐싱 전략: <strong>Cache-aside + TTL</strong>이 실무 기본. Write-through는 일관성 강조시</li>
+        <li>무효화: TTL + 명시적 evict + 버전 키</li>
+        <li>함정: <strong>stampede / penetration / avalanche</strong> — jitter, 분산 락, bloom filter로 대응</li>
+        <li>세션은 Spring Session + Redis로 scale-out 대응. JWT + 블랙리스트 조합도 흔함</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="11-spring-data-jpa.html">&larr; 이전: JPA</a>
+      <a href="13-testing.html">다음: 테스팅 &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+</body>
+</html>

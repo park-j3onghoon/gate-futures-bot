@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>13 - 테스팅 | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .code-py::before { content: "pytest"; display: block; padding: 6px 12px; background: #10b981; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .code-kt::before { content: "JUnit 5 + MockK"; display: block; padding: 6px 12px; background: #3b82f6; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .side-by-side pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-project .file-ref { font-size: 12px; color: #6b7280; font-family: monospace; background: white; padding: 2px 6px; border-radius: 4px; }
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+    .pyramid {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      margin: 24px 0; padding: 20px; background: #f9fafb; border-radius: 12px;
+    }
+    .p-layer {
+      padding: 12px 40px; color: white; font-weight: 700; border-radius: 4px;
+      text-align: center; font-size: 14px;
+    }
+    .p-e2e { background: #ef4444; width: 30%; }
+    .p-int { background: #f59e0b; width: 55%; }
+    .p-unit { background: #10b981; width: 85%; }
+    .p-label { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>13 - 테스팅</h1>
+      <p class="subtitle">pytest 개발자를 위한 JUnit 5 + MockK + Testcontainers</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#pyramid">테스트 피라미드</a></li>
+        <li><a href="#junit">JUnit 5 기본</a></li>
+        <li><a href="#mockk">MockK — Kotlin 전용 mocking</a></li>
+        <li><a href="#param">Parameterized Test</a></li>
+        <li><a href="#spring-test">@SpringBootTest (통합 테스트)</a></li>
+        <li><a href="#mockmvc">MockMvc (Controller 테스트)</a></li>
+        <li><a href="#data-jpa">@DataJpaTest (Repository 테스트)</a></li>
+        <li><a href="#testcontainers">Testcontainers (실제 DB/Redis)</a></li>
+        <li><a href="#coroutines">코루틴 테스트</a></li>
+        <li><a href="#tdd">TDD 실전</a></li>
+        <li><a href="#project">gate-futures-bot 테스트 구조</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="pyramid"><span class="section-num">1</span> 테스트 피라미드</h2>
+    <div class="pyramid">
+      <div class="p-layer p-e2e">E2E (적게)</div>
+      <div class="p-label">실제 브라우저/API 호출. 비쌈, 느림, 간헐적 실패</div>
+      <div class="p-layer p-int">Integration (중간)</div>
+      <div class="p-label">@SpringBootTest + Testcontainers. 실제 DB/Redis와 연동</div>
+      <div class="p-layer p-unit">Unit (많이)</div>
+      <div class="p-label">빠름, 결정적. Service/로직 단위 MockK로 격리</div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">실무 비율 (대략)</div>
+      <p>
+        Unit 70% / Integration 20% / E2E 10% 정도가 건강한 비율.
+        테스트 실행 시간이 커질수록 TDD 사이클이 깨지므로, <strong>단위 테스트를 많이</strong> 두고, 통합 테스트는 <strong>경계 검증</strong>에만.
+      </p>
+    </div>
+
+    <h2 id="junit"><span class="section-num">2</span> JUnit 5 기본</h2>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">import pytest
+
+class TestCalculator:
+    def setup_method(self):
+        self.calc = Calculator()
+
+    def test_add(self):
+        assert self.calc.add(1, 2) == 3
+
+    def test_divide_by_zero(self):
+        with pytest.raises(ZeroDivisionError):
+            self.calc.divide(1, 0)
+
+    @pytest.fixture
+    def user(self):
+        return User(name="Teddy")
+
+    def test_greet(self, user):
+        assert greet(user) == "Hi, Teddy"</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">import org.junit.jupiter.api.*
+import kotlin.test.assertEquals
+
+class CalculatorTest {
+    private lateinit var calc: Calculator
+
+    @BeforeEach
+    fun setUp() {
+        calc = Calculator()
+    }
+
+    @Test
+    fun `should add two numbers`() {
+        assertEquals(3, calc.add(1, 2))
+    }
+
+    @Test
+    fun `should throw on divide by zero`() {
+        assertThrows&lt;ArithmeticException&gt; {
+            calc.divide(1, 0)
+        }
+    }
+
+    @Test
+    @DisplayName("한글 설명도 가능")
+    fun multipleAsserts() {
+        assertAll(
+            { assertEquals(2, calc.add(1, 1)) },
+            { assertEquals(0, calc.subtract(1, 1)) }
+        )
+    }
+}</code></pre>
+      </div>
+    </div>
+
+    <h3>JUnit 5 주요 어노테이션</h3>
+    <table>
+      <thead><tr><th>어노테이션</th><th>의미</th></tr></thead>
+      <tbody>
+        <tr><td><code>@Test</code></td><td>테스트 메서드</td></tr>
+        <tr><td><code>@BeforeEach</code> / <code>@AfterEach</code></td><td>각 테스트 전/후</td></tr>
+        <tr><td><code>@BeforeAll</code> / <code>@AfterAll</code></td><td>클래스 전체 전/후 (정적)</td></tr>
+        <tr><td><code>@DisplayName</code></td><td>테스트 리포트 표시 이름</td></tr>
+        <tr><td><code>@Disabled</code></td><td>일시 비활성</td></tr>
+        <tr><td><code>@Nested</code></td><td>그룹화된 중첩 클래스</td></tr>
+        <tr><td><code>@Tag</code></td><td>카테고리(예: "slow", "integration")</td></tr>
+        <tr><td><code>@Timeout</code></td><td>제한 시간</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Kotlin 테스트 메서드명: backtick 형식</h3>
+<pre><code class="language-kotlin">@Test
+fun `should return empty list when no users exist`() {
+    assertEquals(emptyList&lt;User&gt;(), service.findAll())
+}
+
+// 한글도 OK
+@Test
+fun `포지션이 있을 때는 진입을 건너뛴다`() {
+    ...
+}</code></pre>
+
+    <h3>Assertion 라이브러리</h3>
+<pre><code class="language-kotlin">// JUnit 5 기본 (kotlin.test)
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import kotlin.test.assertNotNull
+
+assertEquals(expected, actual)
+assertTrue(condition)
+assertNotNull(value)
+
+// AssertJ (더 풍부, 체이닝)
+import org.assertj.core.api.Assertions.assertThat
+
+assertThat(users).hasSize(3)
+    .extracting("name")
+    .contains("Teddy", "Bob")
+    .doesNotContain("Charlie")
+
+assertThat(order)
+    .hasFieldOrPropertyWithValue("status", "PAID")
+    .extracting { it.amount }
+    .isEqualTo(BigDecimal("100.50"))
+
+// Kotest 스타일 (선호 가능)
+// userList.shouldHaveSize(3)
+// user.name shouldBe "Teddy"</code></pre>
+
+    <h3>@Nested로 관련 테스트 그룹화</h3>
+<pre><code class="language-kotlin">class UserServiceTest {
+
+    @Nested
+    @DisplayName("createUser 메서드")
+    inner class CreateUser {
+        @Test
+        fun `should succeed with valid data`() { /* ... */ }
+
+        @Test
+        fun `should throw on duplicate email`() { /* ... */ }
+    }
+
+    @Nested
+    @DisplayName("deleteUser 메서드")
+    inner class DeleteUser {
+        @Test
+        fun `should soft delete`() { /* ... */ }
+    }
+}
+// 리포트에서 계층적으로 표시되어 가독성 UP</code></pre>
+
+    <h2 id="mockk"><span class="section-num">3</span> MockK — Kotlin 전용 mocking</h2>
+    <p>
+      Java의 Mockito도 Kotlin에서 쓸 수 있지만, <strong>MockK가 Kotlin 관용구에 더 친화적</strong>.
+      특히 <code>suspend</code> 함수, final 클래스, 확장 함수, object를 기본 지원.
+    </p>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+testImplementation("io.mockk:mockk:1.13.16")
+
+class OrderServiceTest {
+    private lateinit var service: OrderService
+    private lateinit var repo: OrderRepository
+    private lateinit var paymentClient: PaymentClient
+
+    @BeforeEach
+    fun setUp() {
+        repo = mockk()                       // strict: 모든 호출 명시 필요
+        paymentClient = mockk(relaxed = true) // relaxed: 미명시 호출시 기본값 반환
+        service = OrderService(repo, paymentClient)
+    }
+
+    @Test
+    fun `should place order successfully`() {
+        // given
+        val order = Order(id = 1, amount = 100)
+        every { repo.save(any()) } returns order
+        every { paymentClient.charge(any()) } returns PaymentResult.success("tx-1")
+
+        // when
+        val result = service.placeOrder(CreateOrderCommand(amount = 100))
+
+        // then
+        assertEquals(1L, result.id)
+        verify(exactly = 1) { repo.save(any()) }
+        verify(exactly = 1) { paymentClient.charge(100) }
+    }
+
+    @Test
+    fun `should throw when payment fails`() {
+        every { repo.save(any()) } returns Order(id = 1, amount = 100)
+        every { paymentClient.charge(any()) } throws PaymentException("카드 거절")
+
+        assertThrows&lt;PaymentException&gt; {
+            service.placeOrder(CreateOrderCommand(amount = 100))
+        }
+    }
+}</code></pre>
+
+    <h3>MockK 주요 DSL</h3>
+<pre><code class="language-kotlin">// 스텁 (stub)
+every { repo.findById(1) } returns user
+every { repo.findById(any()) } returns user          // any matcher
+every { repo.findById(2) } returns null
+every { repo.findById(3) } throws NotFoundException()
+
+// 순차 반환
+every { repo.findAll() } returnsMany listOf(list1, list2, list3)
+every { repo.findAll() } returns list1 andThen list2
+
+// suspend 함수
+coEvery { client.fetch(any()) } returns "data"
+coEvery { client.fetch(any()) } coAnswers { delay(100); "data" }
+
+// 호출 검증
+verify(exactly = 1) { repo.save(any()) }
+verify(atLeast = 2) { repo.save(any()) }
+verify(exactly = 0) { repo.delete(any()) }  // 호출 안 됨
+verify(timeout = 1000) { repo.save(any()) } // 비동기 검증
+
+// 인자 캡처
+val slot = slot&lt;Order&gt;()
+every { repo.save(capture(slot)) } returns /* ... */
+// 호출 후: slot.captured로 접근
+
+val captures = mutableListOf&lt;Order&gt;()
+every { repo.save(capture(captures)) } returns /* ... */
+// 여러 번 호출되는 경우 리스트로
+
+// 관계 검증
+verifyOrder {                          // 순서 고정
+    repo.findById(1)
+    repo.save(any())
+}
+
+verifySequence {                       // 정확한 순서 + 개수
+    repo.findById(1)
+    repo.save(any())
+}
+
+confirmVerified(repo)                  // 선언한 것 외 호출이 없음을 검증</code></pre>
+
+    <h3>MockK vs Mockito 차이</h3>
+    <table>
+      <thead><tr><th>상황</th><th>MockK</th><th>Mockito</th></tr></thead>
+      <tbody>
+        <tr><td>final 클래스 모킹</td><td>✅ 기본</td><td>mockito-inline 필요</td></tr>
+        <tr><td>suspend 함수</td><td>✅ <code>coEvery</code></td><td>불가능</td></tr>
+        <tr><td>확장 함수</td><td>✅ <code>mockkStatic()</code></td><td>어려움</td></tr>
+        <tr><td>object/companion</td><td>✅ <code>mockkObject()</code></td><td>불가능</td></tr>
+        <tr><td>Kotlin idiom</td><td>✅ relaxed, DSL</td><td>Java 스타일</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="param"><span class="section-num">4</span> Parameterized Test</h2>
+
+<pre><code class="language-kotlin">class ValidationTest {
+
+    @ParameterizedTest
+    @ValueSource(strings = ["", " ", "\t", "\n"])
+    fun `blank strings should be invalid`(value: String) {
+        assertFalse(validator.isValid(value))
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "1, 2, 3",
+        "10, 20, 30",
+        "-1, 1, 0"
+    )
+    fun `add should return sum`(a: Int, b: Int, expected: Int) {
+        assertEquals(expected, Calculator.add(a, b))
+    }
+
+    @ParameterizedTest
+    @MethodSource("userScenarios")
+    fun `user validation`(scenario: UserScenario) {
+        val result = validator.validate(scenario.user)
+        assertEquals(scenario.expectedValid, result.isValid)
+    }
+
+    companion object {
+        @JvmStatic
+        fun userScenarios() = listOf(
+            UserScenario(User(name = "Teddy", age = 30), true),
+            UserScenario(User(name = "", age = 30), false),
+            UserScenario(User(name = "Teddy", age = -1), false)
+        )
+    }
+
+    data class UserScenario(val user: User, val expectedValid: Boolean)
+}</code></pre>
+
+    <h2 id="spring-test"><span class="section-num">5</span> @SpringBootTest (통합 테스트)</h2>
+    <p>실제 Spring Context를 띄워 Bean 간 통합을 테스트. <strong>느리지만</strong> 실제 동작 검증.</p>
+
+<pre><code class="language-kotlin">@SpringBootTest
+class OrderIntegrationTest {
+
+    @Autowired lateinit var orderService: OrderService
+    @Autowired lateinit var orderRepo: OrderRepository
+
+    @Test
+    fun `end-to-end order placement`() {
+        val order = orderService.placeOrder(
+            CreateOrderCommand(amount = 100, userId = 1)
+        )
+        assertNotNull(order.id)
+        assertTrue(orderRepo.existsById(order.id))
+    }
+}
+
+// 특정 Bean만 Mock으로 교체
+@SpringBootTest
+class OrderServiceTest {
+
+    @Autowired lateinit var orderService: OrderService
+
+    @MockkBean          // MockK의 Spring 통합
+    lateinit var paymentClient: PaymentClient
+
+    @Test
+    fun `should rollback on payment failure`() {
+        every { paymentClient.charge(any()) } throws PaymentException("fail")
+
+        assertThrows&lt;PaymentException&gt; {
+            orderService.placeOrder(CreateOrderCommand(amount = 100))
+        }
+        // DB에 주문이 저장되지 않았음을 검증 (트랜잭션 롤백)
+    }
+}</code></pre>
+
+    <h3>프로파일/속성 override</h3>
+<pre><code class="language-kotlin">@SpringBootTest(
+    properties = [
+        "spring.datasource.url=jdbc:h2:mem:testdb",
+        "feature.experimental.enabled=true"
+    ]
+)
+@ActiveProfiles("test")
+class MyIntegrationTest { /* ... */ }
+
+// test 전용 application-test.yml도 가능
+// src/test/resources/application-test.yml</code></pre>
+
+    <h2 id="mockmvc"><span class="section-num">6</span> MockMvc (Controller 테스트)</h2>
+    <p>실제 HTTP 서버를 띄우지 않고 Controller를 Servlet 레벨에서 테스트. <strong>빠름 + 정밀</strong>.</p>
+
+<pre><code class="language-kotlin">@WebMvcTest(UserController::class)  // Controller 계층만 로드
+class UserControllerTest {
+
+    @Autowired lateinit var mockMvc: MockMvc
+    @Autowired lateinit var objectMapper: ObjectMapper
+
+    @MockkBean lateinit var userService: UserService
+
+    @Test
+    fun `GET users by id returns 200`() {
+        every { userService.findById(1) } returns User(id = 1, name = "Teddy")
+
+        mockMvc.perform(get("/api/v1/users/1"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value(1))
+            .andExpect(jsonPath("$.name").value("Teddy"))
+    }
+
+    @Test
+    fun `POST users with invalid body returns 400`() {
+        val request = mapOf("name" to "")  // 빈 이름
+
+        mockMvc.perform(
+            post("/api/v1/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+    }
+
+    @Test
+    fun `DELETE returns 204 No Content`() {
+        every { userService.delete(1) } just Runs
+
+        mockMvc.perform(delete("/api/v1/users/1"))
+            .andExpect(status().isNoContent)
+    }
+}</code></pre>
+
+    <h2 id="data-jpa"><span class="section-num">7</span> @DataJpaTest (Repository 테스트)</h2>
+    <p>JPA 계층만 로드 + 기본 in-memory DB. <strong>각 테스트마다 트랜잭션 롤백</strong>이 기본.</p>
+
+<pre><code class="language-kotlin">@DataJpaTest
+class UserRepositoryTest(
+    @Autowired val userRepo: UserRepository,
+    @Autowired val em: TestEntityManager
+) {
+    @Test
+    fun `should find by email`() {
+        em.persist(User(name = "Teddy", email = "t@x.com"))
+        em.flush()
+
+        val found = userRepo.findByEmail("t@x.com")
+        assertNotNull(found)
+        assertEquals("Teddy", found.name)
+    }
+
+    @Test
+    fun `custom query should work`() {
+        em.persist(User(name = "A", email = "a@x.com"))
+        em.persist(User(name = "B", email = "b@x.com"))
+        em.flush()
+
+        val result = userRepo.findAllByEmailDomain("x.com")
+        assertEquals(2, result.size)
+    }
+}
+
+// @DataJpaTest의 기본 동작:
+// - 전체 Spring Context 대신 JPA 관련 Bean만 로드 (빠름)
+// - 내장 DB (H2) 자동 구성
+// - 각 테스트 후 트랜잭션 롤백 (격리)</code></pre>
+
+    <h2 id="testcontainers"><span class="section-num">8</span> Testcontainers (실제 DB/Redis로 통합 테스트)</h2>
+    <p>
+      <strong>진짜 PostgreSQL/Redis/Kafka 컨테이너</strong>를 테스트 시점에 띄워 통합 테스트.
+      "로컬엔 되는데 운영에선 안 되는" 버그(dialect 차이, 특정 SQL 기능)를 사전 발견.
+    </p>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+testImplementation("org.testcontainers:postgresql:1.20.4")
+testImplementation("org.springframework.boot:spring-boot-testcontainers")
+
+@SpringBootTest
+@Testcontainers
+class OrderIntegrationTest {
+
+    companion object {
+        @Container
+        @JvmStatic
+        val postgres = PostgreSQLContainer("postgres:16-alpine").apply {
+            withDatabaseName("test")
+            withUsername("test")
+            withPassword("test")
+        }
+
+        @Container
+        @JvmStatic
+        val redis = GenericContainer("redis:7-alpine").apply {
+            withExposedPorts(6379)
+        }
+
+        @DynamicPropertySource
+        @JvmStatic
+        fun properties(registry: DynamicPropertyRegistry) {
+            registry.add("spring.datasource.url") { postgres.jdbcUrl }
+            registry.add("spring.datasource.username") { postgres.username }
+            registry.add("spring.datasource.password") { postgres.password }
+            registry.add("spring.data.redis.host") { redis.host }
+            registry.add("spring.data.redis.port") { redis.firstMappedPort }
+        }
+    }
+
+    @Autowired lateinit var orderService: OrderService
+
+    @Test
+    fun `end-to-end with real postgres`() {
+        val order = orderService.placeOrder(...)
+        // 실제 PostgreSQL에 저장되고 실제 Redis 캐시 사용
+    }
+}</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">Testcontainers 팁</div>
+      <ul>
+        <li><strong>Singleton 컨테이너 패턴</strong>: 여러 테스트 클래스가 같은 컨테이너 공유 → 기동 시간 절약</li>
+        <li><strong>ResourceLock</strong>으로 공유 자원 접근 순차화</li>
+        <li>CI에서는 <strong>Docker 데몬 필요</strong>. GitHub Actions는 <code>ubuntu-latest</code>에 기본 탑재</li>
+        <li>M1/M2 Mac은 Rosetta 또는 ARM 이미지 사용(예: <code>postgres:16-alpine</code>은 멀티아키)</li>
+      </ul>
+    </div>
+
+    <h2 id="coroutines"><span class="section-num">9</span> 코루틴 테스트</h2>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+
+class CoroutineServiceTest {
+
+    @Test
+    fun `runTest: virtual time으로 delay 즉시 통과`() = runTest {
+        // runTest는 TestCoroutineScheduler를 제공
+        // delay가 실제 시간 안 기다림
+
+        val job = launch {
+            delay(10_000)   // 즉시 통과
+            doWork()
+        }
+        advanceUntilIdle()  // 모든 코루틴 완료까지 진행
+
+        verify { /* ... */ }
+    }
+
+    @Test
+    fun `advanceTimeBy: 특정 시간 경과`() = runTest {
+        var counter = 0
+        launch {
+            repeat(5) {
+                counter++
+                delay(1000)
+            }
+        }
+
+        advanceTimeBy(500)
+        assertEquals(1, counter)  // 500ms 시점엔 1회만
+
+        advanceTimeBy(3000)
+        assertEquals(4, counter)  // 3500ms 시점
+    }
+
+    @Test
+    fun `runBlocking for real time`() = runBlocking {
+        // virtual time 안 씀, 실시간 대기 필요한 경우
+        val job = launch { doWork() }
+        delay(100)
+        job.cancel()
+    }
+}</code></pre>
+
+    <h2 id="tdd"><span class="section-num">10</span> TDD 실전</h2>
+    <p>Red → Green → Refactor 사이클.</p>
+
+<pre><code class="language-kotlin">// 1. RED: 실패하는 테스트 먼저
+@Test
+fun `calculateRsi returns 100 when all prices increase`() {
+    val prices = (1..20).map { it.toDouble() }
+    assertEquals(100.0, calculateRsi(prices, period = 14))
+}
+// → 함수 없음, 컴파일 에러 (의도적)
+
+// 2. GREEN: 최소한의 구현
+fun calculateRsi(prices: List&lt;Double&gt;, period: Int): Double? {
+    return 100.0  // 일단 하드코딩으로 통과
+}
+
+// 3. 다른 테스트 추가
+@Test
+fun `calculateRsi returns 0 when all prices decrease`() {
+    val prices = (1..20).map { (21 - it).toDouble() }
+    assertEquals(0.0, calculateRsi(prices, period = 14))
+}
+// → 하드코딩이 깨짐 → 실제 로직 구현
+
+// 4. REFACTOR: 테스트가 통과하는 상태에서 코드 개선</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">TDD 테스트 작성 팁</div>
+      <ul>
+        <li>한 테스트는 <strong>한 가지만</strong> 검증 (<code>assertEquals</code> 3줄까지)</li>
+        <li>테스트 이름이 곧 <strong>요구사항 문서</strong></li>
+        <li><strong>Given/When/Then</strong> 패턴으로 구조화 (AAA: Arrange/Act/Assert)</li>
+        <li>엣지 케이스 먼저: null, 빈 입력, 경계값, 음수</li>
+        <li>테스트 이름은 "should_X_when_Y" 또는 "명사 설명"</li>
+      </ul>
+    </div>
+
+    <h2 id="project"><span class="section-num">11</span> gate-futures-bot 테스트 구조</h2>
+
+    <h3>11.1 MockK로 SDK 클라이언트 격리</h3>
+    <span class="file-ref">src/test/kotlin/.../client/GateClientTest.kt</span>
+<pre><code class="language-kotlin">class GateClientTest {
+    private lateinit var client: GateClient
+    private lateinit var futuresApi: FuturesApi
+
+    @BeforeEach
+    fun setUp() {
+        val apiProperties = ApiProperties(
+            key = "test-key", secret = "test-secret",
+            host = "https://api.gateio.ws/api/v4", settle = "usdt"
+        )
+        futuresApi = mockk()  // Java SDK 타입도 MockK가 모킹
+        client = GateClient(apiProperties, futuresApi)
+    }
+
+    @Test
+    fun `should throw AuthenticationException on INVALID_KEY`() {
+        val exception = GateApiException("INVALID_KEY", "Invalid API key", "")
+        every { futuresApi.createFuturesOrder("usdt", any(), null) } throws exception
+
+        assertThrows&lt;AuthenticationException&gt; {
+            client.createOrder("BTC_USDT", 1L)
+        }
+    }
+}</code></pre>
+
+    <h3>11.2 경계값 테스트 (지표)</h3>
+    <span class="file-ref">src/test/kotlin/.../market/IndicatorsTest.kt</span>
+<pre><code class="language-kotlin">class IndicatorsTest {
+    @Test
+    fun `SMA returns null when prices shorter than period`() {
+        assertNull(calculateSma(listOf(1.0, 2.0), 3))
+    }
+
+    @Test
+    fun `RSI equals 50 when no price changes`() {
+        val prices = List(20) { 100.0 }
+        assertEquals(50.0, calculateRsi(prices, period = 14))
+    }
+
+    @Test
+    fun `RSI throws on non-positive period`() {
+        assertThrows&lt;IllegalArgumentException&gt; {
+            calculateRsi(listOf(1.0, 2.0), 0)
+        }
+    }
+}</code></pre>
+
+    <h3>11.3 MockK로 내부 레이어 mocking (Strategy 테스트)</h3>
+    <span class="file-ref">src/test/kotlin/.../strategy/TradingStrategyTest.kt</span>
+<pre><code class="language-kotlin">@Test
+fun `TakeProfitPct triggers when long PnL reaches threshold exactly`() {
+    val position = longPosition(entry = 100.0, size = 1L)
+    val condition = ExitCondition.TakeProfitPct(5.0)
+
+    assertTrue(condition.evaluate(prices = listOf(105.0), position = position))
+    assertFalse(condition.evaluate(prices = listOf(104.99), position = position))
+    // 경계값 정확히 테스트
+}</code></pre>
+
+    <h3>11.4 코루틴 + MockK 통합</h3>
+    <span class="file-ref">src/test/kotlin/.../worker/CoinWorkerTest.kt</span>
+<pre><code class="language-kotlin">@Test
+fun `runOnce opens long when long signal and no position`() = runTest {
+    val trader = mockk&lt;FuturesTrader&gt;()
+    val marketData = mockk&lt;MarketDataService&gt;()
+    val rateLimiter = mockk&lt;RateLimiter&gt;()
+    coEvery { rateLimiter.acquire() } just Runs   // suspend 함수는 coEvery
+    every { trader.getCurrentPosition(contract) } returns null
+
+    val fallingCandles = fallingPriceCandles(20)
+    every { marketData.getCandles(contract, Interval.MIN_1, 100, null, null) } returns fallingCandles
+    every { trader.openLong(contract, 1, 5) } returns orderResult
+
+    val worker = newWorker(trader, marketData, rateLimiter, strategy)
+    worker.runOnce()
+
+    verify(exactly = 1) { trader.openLong(contract, 1, 5) }
+}</code></pre>
+
+    <h3>11.5 @SpringBootTest로 실제 컨텍스트 검증</h3>
+    <span class="file-ref">src/test/kotlin/.../config/StrategyBindingIntegrationTest.kt</span>
+<pre><code class="language-kotlin">@SpringBootTest(properties = [
+    "strategy.contracts.BTC_USDT.long-entries[0].indicator=RSI",
+    "strategy.contracts.BTC_USDT.long-entries[0].operator=LT",
+    "strategy.contracts.BTC_USDT.long-entries[0].value=30.0"
+])
+class StrategyBindingIntegrationTest {
+
+    @Autowired lateinit var properties: StrategyProperties
+    @Autowired lateinit var assembler: StrategyAssembler
+
+    @Test
+    fun `StrategyProperties binds nested map and lists`() {
+        val spec = properties.contracts["BTC_USDT"]!!
+        assertEquals(Indicator.RSI, spec.longEntries[0].indicator)
+        // 실제 Spring binder가 YAML → 객체 변환을 정상 수행하는지
+    }
+}</code></pre>
+
+    <h3>11.6 커버리지 (Jacoco)</h3>
+<pre><code class="language-kotlin">// build.gradle.kts
+plugins {
+    id("jacoco")
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required = true   // CI/SonarQube 용
+        html.required = true  // 로컬 확인
+    }
+}
+
+tasks.jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                counter = "INSTRUCTION"
+                minimum = BigDecimal("0.80")  // 80% 이상
+            }
+        }
+    }
+}
+
+// 실행
+./gradlew test jacocoTestReport
+// 결과: build/reports/jacoco/test/html/index.html</code></pre>
+
+    <h2 id="interview"><span class="section-num">12</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. 단위 테스트와 통합 테스트의 경계를 어떻게 나누시나요?</div>
+      <div class="a">
+        A. <strong>단위 테스트</strong>는 한 클래스 또는 함수를 외부 의존성 없이 검증 — 모든 collaborator를 MockK로 격리. Spring 없이 직접 생성 가능. 빠르고 결정적.
+        <strong>통합 테스트</strong>는 여러 Bean이 함께 작동하는지 검증 — <code>@SpringBootTest</code>로 Context 로드, DB/Redis는 Testcontainers로 실제 연결.
+        경계 기준: <strong>"Spring Context가 필요한가?"</strong>. 필요 없으면 단위, 필요하면 통합. 서비스 로직은 90% 단위로 커버, <code>@Transactional</code> 동작, JPA 쿼리, MVC 바인딩 같은 "프레임워크 상호작용"은 통합에서만 검증.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. MockK와 Mockito 중 어느 것을 선호하시나요?</div>
+      <div class="a">
+        A. Kotlin 프로젝트는 <strong>MockK</strong>. 이유: ①<code>suspend</code> 함수에 <code>coEvery</code> 지원, ②Kotlin의 <strong>final 클래스를 기본으로</strong> 모킹 (Mockito는 <code>mockito-inline</code> 필요), ③확장 함수/object/companion object 모킹 지원, ④DSL이 Kotlin 관용구(람다 + infix)에 잘 맞음. Mockito는 Java 라이브러리와의 혼용이 필요한 경우만 유지.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Testcontainers의 장점은?</div>
+      <div class="a">
+        A. <strong>"로컬 H2와 운영 PostgreSQL의 미세한 차이로 인한 버그"</strong>를 사전 발견할 수 있습니다.
+        구체적 이점:
+        ①<strong>실제 DB dialect</strong>(JSONB, window 함수, ARRAY 등) 사용 가능.
+        ②<strong>실제 Redis</strong>로 pub/sub, Lua 스크립트 검증.
+        ③<strong>Kafka/RabbitMQ</strong>도 실컨테이너로 통합 테스트.
+        ④각 테스트마다 <strong>깨끗한 컨테이너</strong> → 테스트 격리.
+        단점은 <strong>느림</strong>(기동 ~5초) — 싱글턴 컨테이너 패턴으로 완화. CI에서 Docker 요구.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 코드 커버리지 목표는?</div>
+      <div class="a">
+        A. <strong>line/instruction 80%</strong>를 실무 기준으로 합니다. 다만 <strong>숫자 자체보다 "무엇을 안 테스트했나"가 중요</strong>. 100%는 과하고(getter/setter까지), 너무 낮으면 회귀 테스트 부족.
+        branch coverage(if/else 커버)도 70%+를 목표. Jacoco로 측정, CI에서 임계값 미달시 빌드 실패. <strong>핵심 도메인(결제/정산)은 95%+</strong>, 단순 CRUD는 80%면 충분. 커버리지는 품질 증거가 아니라 <strong>"테스트 안 된 코드 탐지"</strong> 도구라는 관점이 중요.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>@Transactional</code>을 테스트에서 어떻게 활용하시나요?</div>
+      <div class="a">
+        A. 두 가지 상황:
+        ①<strong>@DataJpaTest</strong>는 기본적으로 각 테스트를 트랜잭션으로 감싸고 <strong>자동 롤백</strong>합니다. 테스트 간 데이터 격리 보장.
+        ②<strong>@SpringBootTest + @Transactional</strong> 조합도 같은 효과 — 단 여러 스레드/코루틴/비동기가 있으면 롤백 범위 벗어남에 주의.
+        <strong>통합 테스트에서 커밋이 필요한 경우</strong>(이벤트 발생, 캐시 상호작용): <code>@Commit</code> 어노테이션 또는 롤백 해제. 그 경우 테스트 후 수동 정리 필요.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 테스트가 느려질 때 어떻게 대응하나요?</div>
+      <div class="a">
+        A.
+        ①<strong>프로파일링</strong>: Gradle <code>--profile</code> 또는 Gradle Enterprise scan으로 느린 테스트 식별.
+        ②<strong>@SpringBootTest 최소화</strong>: 필요한 계층만 로드(<code>@WebMvcTest</code>, <code>@DataJpaTest</code>).
+        ③<strong>Testcontainer 싱글턴</strong>: 여러 테스트 공유.
+        ④<strong>MockBean 줄이기</strong>: <code>@MockBean</code>은 Context를 재로드시킴 → 불필요한 Mock은 <code>@MockkBean</code>으로.
+        ⑤<strong>병렬 실행</strong>: <code>junit-platform.properties</code>에 <code>junit.jupiter.execution.parallel.enabled=true</code>.
+        ⑥<strong>태그 분리</strong>: <code>@Tag("slow")</code>로 분리, CI에서 병렬 파이프라인.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li>JUnit 5 + <strong>MockK</strong>(Kotlin 전용) + AssertJ 조합이 표준</li>
+        <li>테스트 메서드명은 backtick 형식 (한글도 OK), <strong>@Nested</strong>로 그룹화</li>
+        <li>통합: <code>@SpringBootTest</code>, Controller만: <code>@WebMvcTest</code>, JPA만: <code>@DataJpaTest</code></li>
+        <li><strong>Testcontainers</strong>로 실제 PostgreSQL/Redis 통합 테스트</li>
+        <li>코루틴은 <code>runTest</code>(virtual time) / <code>runBlocking</code>(실시간)</li>
+        <li>TDD: Red → Green → Refactor. 한 테스트는 한 가지만 검증</li>
+        <li>커버리지 <strong>80%+</strong> 목표 (Jacoco), 핵심 도메인은 95%+</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="12-nosql-caching.html">&larr; 이전: NoSQL · 캐싱</a>
+      <a href="14-observability.html">다음: 관측성 &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>14 - 관측성 | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-project .file-ref { font-size: 12px; color: #6b7280; font-family: monospace; background: white; padding: 2px 6px; border-radius: 4px; }
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+
+    .three-pillars {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 20px 0;
+    }
+    .pillar-card {
+      padding: 20px; border-radius: 12px; border-top: 4px solid;
+      background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .pillar-card.logs { border-top-color: #3b82f6; }
+    .pillar-card.metrics { border-top-color: #10b981; }
+    .pillar-card.traces { border-top-color: #f59e0b; }
+    .pillar-card h4 { margin: 0 0 8px 0; }
+    .pillar-card .desc { font-size: 13px; color: #374151; line-height: 1.6; }
+    .pillar-card .tools { font-size: 12px; color: #6b7280; margin-top: 8px; font-style: italic; }
+
+    .metric-table th { background: #7c3aed; color: white; padding: 10px; font-size: 13px; }
+    .metric-table td { padding: 10px; border: 1px solid #e5e7eb; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>14 - 관측성 (Observability)</h1>
+      <p class="subtitle">Actuator, Micrometer, MDC, 구조화 로깅, 분산 추적</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#three">세 기둥: Logs · Metrics · Traces</a></li>
+        <li><a href="#logging">로깅 (SLF4J + Logback)</a></li>
+        <li><a href="#mdc">MDC로 구조화된 로깅</a></li>
+        <li><a href="#actuator">Spring Boot Actuator</a></li>
+        <li><a href="#micrometer">Micrometer (메트릭)</a></li>
+        <li><a href="#custom-metrics">커스텀 메트릭</a></li>
+        <li><a href="#prometheus">Prometheus + Grafana</a></li>
+        <li><a href="#tracing">분산 추적 (Micrometer Tracing)</a></li>
+        <li><a href="#alert">알림 설계</a></li>
+        <li><a href="#project">gate-futures-bot 관측성</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="three"><span class="section-num">1</span> 세 기둥: Logs · Metrics · Traces</h2>
+    <p>관측성(observability)의 3가지 데이터 종류. 역할이 다름.</p>
+
+    <div class="three-pillars">
+      <div class="pillar-card logs">
+        <h4>Logs (로그)</h4>
+        <div class="desc">
+          사람이 읽을 수 있는 이벤트 기록.
+          "무슨 일이 일어났나"의 상세 설명.
+          고비용 (디스크/저장소).
+        </div>
+        <div class="tools">SLF4J, Logback, JSON Appender, ELK/Loki</div>
+      </div>
+      <div class="pillar-card metrics">
+        <h4>Metrics (지표)</h4>
+        <div class="desc">
+          시계열 숫자 데이터.
+          "얼마나 많이, 얼마나 빠르게" 집계된 값.
+          저비용, 대시보드/알림용.
+        </div>
+        <div class="tools">Micrometer, Prometheus, CloudWatch, Grafana</div>
+      </div>
+      <div class="pillar-card traces">
+        <h4>Traces (추적)</h4>
+        <div class="desc">
+          요청이 여러 서비스를 거치는 경로 기록.
+          "어디서 느려졌나"를 보여줌.
+          MSA 필수.
+        </div>
+        <div class="tools">Micrometer Tracing, Zipkin, Jaeger, AWS X-Ray</div>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">실무 조합</div>
+      <p>
+        <strong>Logs</strong> → 사고 조사용 (post-mortem).<br>
+        <strong>Metrics</strong> → 실시간 모니터링/알림 (PagerDuty).<br>
+        <strong>Traces</strong> → 성능 분석/디버깅 (한 요청이 왜 5초 걸렸나).<br>
+        셋 다 필요. 각각 다른 질문에 답함.
+      </p>
+    </div>
+
+    <h2 id="logging"><span class="section-num">2</span> 로깅 (SLF4J + Logback)</h2>
+    <p>
+      Spring Boot 기본 로깅 스택: <strong>SLF4J</strong>(API) + <strong>Logback</strong>(구현).
+      Python의 <code>logging</code>과 유사하지만 <strong>API와 구현이 분리</strong>됨 → 런타임에 구현 교체 가능.
+    </p>
+
+<pre><code class="language-kotlin">import org.slf4j.LoggerFactory
+
+class OrderService {
+    private val logger = LoggerFactory.getLogger(OrderService::class.java)
+
+    fun placeOrder(cmd: OrderCommand) {
+        logger.trace("trace level")     // 가장 상세
+        logger.debug("debug: {}", cmd)   // 개발용
+        logger.info("주문 생성: id={}, amount={}", id, amount)  // 정상 이벤트
+        logger.warn("재고 부족 경고: productId={}", productId)   // 주의
+        logger.error("주문 실패", exception)                      // 에러
+    }
+}
+
+// 또는 Kotlin 확장 (mu-kotlin-logging)
+import io.github.oshai.kotlinlogging.KotlinLogging
+private val logger = KotlinLogging.logger {}
+
+logger.info { "주문 생성: id=$id" }  // 람다 — 로그 레벨 비활성시 평가 안 함 (성능)</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">SLF4J 플레이스홀더 사용 (성능)</div>
+<pre><code class="language-kotlin">// ❌ 문자열 연결이 항상 수행됨
+logger.debug("user = " + user.toString())
+
+// ✅ debug 비활성시 user.toString() 호출 안 됨
+logger.debug("user = {}", user)</code></pre>
+    </div>
+
+    <h3>로그 레벨 설정 (application.yml)</h3>
+<pre><code class="language-yaml">logging:
+  level:
+    root: INFO
+    com.tnear: DEBUG              # 우리 코드 상세
+    org.hibernate.SQL: DEBUG      # JPA 쿼리 로깅
+    org.hibernate.orm.jdbc.bind: TRACE  # 바인딩 값
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+  file:
+    name: logs/app.log
+  logback:
+    rollingpolicy:
+      max-file-size: 100MB
+      max-history: 30</code></pre>
+
+    <h3>Logback 커스터마이즈 (logback-spring.xml)</h3>
+<pre><code class="language-xml">&lt;configuration&gt;
+    &lt;springProfile name="dev"&gt;
+        &lt;include resource="org/springframework/boot/logging/logback/base.xml"/&gt;
+    &lt;/springProfile&gt;
+
+    &lt;springProfile name="prod"&gt;
+        &lt;!-- JSON 구조화 로그 (ELK, CloudWatch에 최적) --&gt;
+        &lt;appender name="JSON" class="ch.qos.logback.core.ConsoleAppender"&gt;
+            &lt;encoder class="net.logstash.logback.encoder.LogstashEncoder"/&gt;
+        &lt;/appender&gt;
+
+        &lt;root level="INFO"&gt;
+            &lt;appender-ref ref="JSON"/&gt;
+        &lt;/root&gt;
+    &lt;/springProfile&gt;
+&lt;/configuration&gt;</code></pre>
+
+    <h2 id="mdc"><span class="section-num">3</span> MDC로 구조화된 로깅</h2>
+    <p>
+      <strong>Mapped Diagnostic Context</strong>. 스레드-로컬 저장소에 컨텍스트(traceId, userId 등) 저장 → 모든 로그에 자동 포함.
+      분산 시스템에서 "이 요청의 모든 로그"를 한번에 grep할 수 있게 해줌.
+    </p>
+
+<pre><code class="language-kotlin">import org.slf4j.MDC
+
+// 수동 MDC
+MDC.put("userId", "42")
+MDC.put("requestId", UUID.randomUUID().toString())
+try {
+    logger.info("주문 처리 시작")   // 로그에 userId, requestId 자동 포함
+    processOrder()
+} finally {
+    MDC.clear()  // 반드시 정리 (thread pool 재사용 대비)
+}
+
+// Servlet Filter로 모든 요청에 traceId 자동 주입
+@Component
+class TraceIdFilter : OncePerRequestFilter() {
+    override fun doFilterInternal(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        chain: FilterChain
+    ) {
+        val traceId = request.getHeader("X-Trace-Id") ?: UUID.randomUUID().toString()
+        MDC.put("traceId", traceId)
+        response.setHeader("X-Trace-Id", traceId)
+        try {
+            chain.doFilter(request, response)
+        } finally {
+            MDC.clear()
+        }
+    }
+}
+
+// application.yml에서 패턴에 MDC 포함
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%X{traceId}] [%X{userId}] %-5level %logger - %msg%n"</code></pre>
+
+    <div class="box-project">
+      <div class="box-title">프로젝트 사용 예: contract를 MDC로</div>
+      <span class="file-ref">src/main/kotlin/.../worker/CoinWorker.kt</span>
+<pre style="margin-top: 8px;"><code class="language-kotlin">suspend fun run() {
+    MDC.put("contract", contract)   // 워커 시작시 주입
+    try {
+        while (currentCoroutineContext().isActive) {
+            runOnce()
+            delay(config.checkIntervalMillis)
+        }
+    } finally {
+        logger.info("워커 종료")
+        MDC.remove("contract")      // 종료시 정리
+    }
+}
+
+// 로그 출력 (application.yml의 pattern에 [contract=%X{contract}] 포함)
+// 2026-04-17 15:30:00 [contract=BTC_USDT] INFO  CoinWorker - 롱 진입 시그널
+// 2026-04-17 15:30:05 [contract=ETH_USDT] INFO  CoinWorker - 청산 시그널
+// → contract별 grep이 쉬움</code></pre>
+    </div>
+
+    <h3>코루틴과 MDC</h3>
+<pre><code class="language-kotlin">// ⚠️ 코루틴 dispatcher 스위칭시 MDC가 따라가지 않음!
+launch(Dispatchers.IO) {
+    logger.info("...")  // MDC 정보 유실 가능
+}
+
+// 해결: MDCContext 사용
+import kotlinx.coroutines.slf4j.MDCContext
+
+launch(Dispatchers.IO + MDCContext()) {
+    logger.info("...")  // MDC 유지
+}
+
+// build.gradle.kts:
+// implementation("org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:1.10.2")</code></pre>
+
+    <h2 id="actuator"><span class="section-num">4</span> Spring Boot Actuator</h2>
+    <p>의존성 하나 추가하면 <strong>운영 엔드포인트가 자동 제공</strong>. 수동으로 구현할 필요 없음.</p>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+implementation("org.springframework.boot:spring-boot-starter-actuator")</code></pre>
+
+<pre><code class="language-yaml"># application.yml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus, loggers, threaddump, heapdump
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized  # 인증된 사용자만 상세
+      probes:
+        enabled: true   # liveness, readiness 분리
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  info:
+    git:
+      enabled: true
+      mode: full</code></pre>
+
+    <h3>주요 엔드포인트</h3>
+    <table class="metric-table">
+      <thead><tr><th>엔드포인트</th><th>용도</th></tr></thead>
+      <tbody>
+        <tr><td><code>/actuator/health</code></td><td>앱 전체 상태 (UP/DOWN)</td></tr>
+        <tr><td><code>/actuator/health/liveness</code></td><td>Kubernetes liveness probe용</td></tr>
+        <tr><td><code>/actuator/health/readiness</code></td><td>Kubernetes readiness probe용</td></tr>
+        <tr><td><code>/actuator/info</code></td><td>빌드 버전, git commit 등</td></tr>
+        <tr><td><code>/actuator/metrics</code></td><td>Micrometer 메트릭 목록</td></tr>
+        <tr><td><code>/actuator/metrics/{name}</code></td><td>특정 메트릭 상세</td></tr>
+        <tr><td><code>/actuator/prometheus</code></td><td>Prometheus 스크래핑 형식</td></tr>
+        <tr><td><code>/actuator/loggers</code></td><td>런타임 로그 레벨 조회/변경</td></tr>
+        <tr><td><code>/actuator/threaddump</code></td><td>모든 스레드 덤프 (디버깅)</td></tr>
+        <tr><td><code>/actuator/heapdump</code></td><td>힙 덤프 파일 다운로드</td></tr>
+        <tr><td><code>/actuator/env</code></td><td>환경변수 + 설정값</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Custom Health Indicator</h3>
+<pre><code class="language-kotlin">@Component
+class RedisHealthIndicator(
+    private val redisTemplate: StringRedisTemplate
+) : HealthIndicator {
+    override fun health(): Health = try {
+        redisTemplate.opsForValue().get("health:check")
+        Health.up().withDetail("redis", "connected").build()
+    } catch (e: Exception) {
+        Health.down(e).withDetail("redis", "down").build()
+    }
+}
+
+// /actuator/health 응답:
+// { "status": "UP", "components": { "redis": { "status": "UP", "details": { ... } } } }</code></pre>
+
+    <h2 id="micrometer"><span class="section-num">5</span> Micrometer (메트릭)</h2>
+    <p>
+      <strong>"메트릭 계의 SLF4J"</strong> — API 표준. Prometheus/Datadog/CloudWatch/New Relic 등 어느 백엔드라도 코드 변경 없이 전환 가능.
+    </p>
+
+<pre><code class="language-kotlin">// Prometheus 백엔드
+implementation("io.micrometer:micrometer-registry-prometheus")
+
+// Datadog 백엔드 (선택)
+// implementation("io.micrometer:micrometer-registry-datadog")
+
+// CloudWatch 백엔드 (선택)
+// implementation("io.micrometer:micrometer-registry-cloudwatch2")</code></pre>
+
+    <h3>자동 제공되는 메트릭</h3>
+    <ul>
+      <li><strong>JVM</strong>: <code>jvm.memory.used</code>, <code>jvm.gc.pause</code>, <code>jvm.threads.live</code></li>
+      <li><strong>System</strong>: <code>system.cpu.usage</code>, <code>process.cpu.usage</code></li>
+      <li><strong>HTTP</strong>: <code>http.server.requests</code> (요청 수/지연 분포)</li>
+      <li><strong>DB</strong>: HikariCP 커넥션 풀 상태</li>
+      <li><strong>Tomcat</strong>: 스레드 풀, 세션</li>
+      <li><strong>Cache</strong>: 히트/미스 카운트</li>
+    </ul>
+
+    <h2 id="custom-metrics"><span class="section-num">6</span> 커스텀 메트릭</h2>
+
+<pre><code class="language-kotlin">@Service
+class OrderService(
+    private val orderRepo: OrderRepository,
+    private val meterRegistry: MeterRegistry
+) {
+    // 1. Counter — 단조 증가하는 카운트
+    private val orderCounter = Counter.builder("orders.created")
+        .description("생성된 주문 수")
+        .tag("region", "kr")
+        .register(meterRegistry)
+
+    // 2. Timer — 지연 시간 분포 + 호출 수
+    private val orderTimer = Timer.builder("orders.placement.duration")
+        .description("주문 처리 시간")
+        .publishPercentiles(0.5, 0.95, 0.99)  // p50, p95, p99
+        .register(meterRegistry)
+
+    // 3. Gauge — 현재 값 (게이지)
+    init {
+        Gauge.builder("orders.pending.count") { orderRepo.countByStatus("PENDING") }
+            .description("대기중인 주문 수")
+            .register(meterRegistry)
+    }
+
+    fun placeOrder(cmd: OrderCommand): Order {
+        return orderTimer.record&lt;Order&gt; {
+            val order = orderRepo.save(Order.create(cmd))
+            orderCounter.increment()
+            // 태그 동적 추가
+            Counter.builder("orders.created")
+                .tag("status", order.status.name)
+                .tag("channel", cmd.channel)
+                .register(meterRegistry)
+                .increment()
+            order
+        }
+    }
+}
+
+// /actuator/prometheus 출력:
+// orders_created_total{region="kr"} 1234.0
+// orders_placement_duration_seconds_count 1234
+// orders_placement_duration_seconds_sum 45.6
+// orders_placement_duration_seconds{quantile="0.5"} 0.012
+// orders_placement_duration_seconds{quantile="0.95"} 0.087
+// orders_pending_count 42.0</code></pre>
+
+    <h3>어노테이션 기반</h3>
+<pre><code class="language-kotlin">import io.micrometer.core.annotation.Timed
+import io.micrometer.core.annotation.Counted
+
+@RestController
+class UserController {
+    @Timed(value = "api.users.get", histogram = true)
+    @GetMapping("/users/{id}")
+    fun get(@PathVariable id: Long): UserResponse = ...
+
+    @Counted(value = "api.users.create")
+    @PostMapping("/users")
+    fun create(@RequestBody req: CreateUserRequest): UserResponse = ...
+}
+// AspectJ 또는 Spring Boot Actuator의 @Timed aspect 활성화 필요</code></pre>
+
+    <h2 id="prometheus"><span class="section-num">7</span> Prometheus + Grafana</h2>
+
+<pre><code class="language-yaml"># prometheus.yml
+scrape_configs:
+  - job_name: 'my-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['my-service:8080']
+    scrape_interval: 15s</code></pre>
+
+    <p>Prometheus가 15초마다 <code>/actuator/prometheus</code>를 긁어가 저장. Grafana에서 시각화.</p>
+
+    <h3>자주 쓰는 PromQL 쿼리</h3>
+<pre><code class="language-promql"># 분당 요청 수 (rate per minute)
+rate(http_server_requests_seconds_count[1m])
+
+# 상위 10개 가장 느린 엔드포인트
+topk(10,
+  histogram_quantile(0.95,
+    sum(rate(http_server_requests_seconds_bucket[5m])) by (uri, le)
+  )
+)
+
+# 5xx 에러율
+sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+/
+sum(rate(http_server_requests_seconds_count[5m]))
+
+# JVM heap 사용률
+jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}
+
+# 주문 성공률
+rate(orders_created_total{status="SUCCESS"}[5m])
+/
+rate(orders_created_total[5m])</code></pre>
+
+    <h2 id="tracing"><span class="section-num">8</span> 분산 추적</h2>
+    <p>
+      <strong>한 요청이 여러 서비스를 거칠 때</strong>, 각 단계의 지연을 추적. MSA에선 필수.
+      Spring Boot 3.x는 <strong>Micrometer Tracing</strong>이 표준 (이전 Spring Cloud Sleuth의 후속).
+    </p>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+implementation("io.micrometer:micrometer-tracing-bridge-brave")
+implementation("io.zipkin.reporter2:zipkin-reporter-brave")
+
+// application.yml
+management:
+  tracing:
+    sampling:
+      probability: 0.1   # 10% 샘플링 (prod)
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans</code></pre>
+
+<pre><code class="language-kotlin">// 자동 계측: Spring MVC, WebClient, RestTemplate, JPA 등
+// → HTTP 헤더(B3 또는 W3C Trace Context)에 traceId/spanId 자동 전파
+
+// 수동 Span
+@Component
+class OrderService(private val tracer: Tracer) {
+    fun placeOrder(cmd: OrderCommand): Order {
+        val span = tracer.nextSpan().name("placeOrder").start()
+        try {
+            tracer.withSpan(span).use {
+                return doPlaceOrder(cmd)
+            }
+        } catch (e: Exception) {
+            span.error(e)
+            throw e
+        } finally {
+            span.end()
+        }
+    }
+}</code></pre>
+
+    <p>
+      결과: Zipkin/Jaeger UI에서 "주문 요청 → API Gateway → Order Service → Payment Service → DB"의
+      <strong>각 단계 소요 시간</strong>이 폭포수 차트로 표시됨. 병목 식별 쉬움.
+    </p>
+
+    <h2 id="alert"><span class="section-num">9</span> 알림 설계</h2>
+    <p>메트릭이 있으면 <strong>임계값 초과시 자동 알림</strong>이 가능합니다. PagerDuty/Slack 연동.</p>
+
+    <h3>SLO 기반 알림 설계 예시</h3>
+<pre><code class="language-yaml"># Prometheus Alertmanager
+groups:
+  - name: api
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          / sum(rate(http_server_requests_seconds_count[5m])) > 0.01
+        for: 5m   # 5분 이상 지속시
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "에러율 1% 초과 ({{ $value | humanizePercentage }})"
+          runbook: "https://wiki/runbook/high-error-rate"
+
+      - alert: SlowResponse
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 10m
+        annotations:
+          summary: "p95 응답 시간 1초 초과"
+
+      - alert: HighJvmHeap
+        expr: jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.9
+        for: 15m</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">알림 설계 원칙</div>
+      <ul>
+        <li><strong>Actionable</strong>: 알림 받으면 뭘 해야 하는지 명확 (runbook 링크)</li>
+        <li><strong>Severity 구분</strong>: critical (즉시 대응) / warning (다음 영업일)</li>
+        <li><strong>알림 피로 방지</strong>: <code>for: 5m</code>으로 일시적 spike 무시</li>
+        <li><strong>근본 원인 지향</strong>: "에러율 높음"(증상) 대신 "DB 커넥션 고갈"(원인)</li>
+        <li><strong>silence</strong>: 배포 중에는 알림 음소거 (Alertmanager inhibit rule)</li>
+      </ul>
+    </div>
+
+    <h2 id="project"><span class="section-num">10</span> gate-futures-bot 관측성</h2>
+
+    <h3>현재 구현</h3>
+    <span class="file-ref">src/main/resources/application.yml</span>
+<pre><code class="language-yaml">logging:
+  level:
+    com.parkj3onghoon.gatefuturesbot: INFO
+  # MDC의 contract 키를 [contract=...] 포맷으로 자동 포함
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{36} %replace(- [contract=%X{contract}] ){'- \\[contract=\\] ', '- '} %msg%n"</code></pre>
+
+    <span class="file-ref">src/main/kotlin/.../worker/BotRunner.kt</span>
+<pre><code class="language-kotlin">private fun logEnvironmentBanner() {
+    val mode = if (apiProperties.isTestnet) "TESTNET" else "MAINNET"
+    logger.info("환경: host={}, mode={}, contracts={}, configuredStrategies={}",
+        apiProperties.host, mode, botProperties.contracts, strategyProperties.contracts.keys)
+
+    if (apiProperties.isProdWithKey) {
+        logger.warn("MAINNET(실거래) API 키가 바인딩되었습니다. ...")
+    }
+}</code></pre>
+
+    <h3>향후 확장 (면접 "어떻게 개선할지"에 답할 포인트)</h3>
+<pre><code class="language-kotlin">// 1. Actuator 추가
+// implementation("org.springframework.boot:spring-boot-starter-actuator")
+// implementation("io.micrometer:micrometer-registry-prometheus")
+
+// 2. 주문 성공/실패 카운터
+@Service
+class FuturesTrader(
+    private val client: GateClient,
+    private val meterRegistry: MeterRegistry
+) {
+    fun openLong(contract: String, size: Int, leverage: Int): OrderResult {
+        return try {
+            val result = client.createOrder(contract, size.toLong())
+            Counter.builder("bot.orders.success")
+                .tag("contract", contract)
+                .tag("side", "long")
+                .register(meterRegistry).increment()
+            result
+        } catch (e: Exception) {
+            Counter.builder("bot.orders.failure")
+                .tag("contract", contract)
+                .tag("reason", e::class.simpleName ?: "unknown")
+                .register(meterRegistry).increment()
+            throw e
+        }
+    }
+}
+
+// 3. 워커 iteration 지연
+@Service
+class CoinWorker(private val meterRegistry: MeterRegistry, ...) {
+    private val iterationTimer = Timer.builder("bot.worker.iteration")
+        .tag("contract", contract)
+        .register(meterRegistry)
+
+    internal suspend fun runOnce() {
+        iterationTimer.record&lt;Unit&gt; {
+            // ... 비즈니스 로직
+        }
+    }
+}
+
+// 4. 포지션 게이지
+init {
+    Gauge.builder("bot.position.size") {
+        client.getPosition(contract)?.size?.toDouble() ?: 0.0
+    }.tag("contract", contract).register(meterRegistry)
+}</code></pre>
+
+    <h2 id="interview"><span class="section-num">11</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. 관측성의 3가지 기둥을 설명해주세요.</div>
+      <div class="a">
+        A. <strong>Logs</strong>(로그): 사람이 읽을 수 있는 이벤트 기록. "무슨 일이 일어났나"의 상세. 사고 post-mortem에 필수.
+        <strong>Metrics</strong>(메트릭): 시계열 숫자 데이터. "얼마나 많이, 얼마나 빠르게". 저비용이고 실시간 대시보드/알림에 사용.
+        <strong>Traces</strong>(분산 추적): 한 요청이 여러 서비스를 거치는 경로. "어디서 느려졌나". MSA에서 필수.
+        셋은 서로 다른 질문에 답하므로 <strong>함께 사용</strong>합니다. 로그로 사건 재구성, 메트릭으로 추세/알림, 트레이스로 병목 식별.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. MDC가 무엇이고 어떻게 활용하나요?</div>
+      <div class="a">
+        A. <strong>Mapped Diagnostic Context</strong>. 스레드-로컬 Map에 컨텍스트(traceId, userId, orderId 등)를 담아두면 <strong>모든 로그에 자동 포함</strong>됩니다. 활용:
+        ①HTTP 요청마다 Filter에서 traceId 주입 → 해당 요청의 모든 로그가 연결됨.
+        ②워커/배치 작업에 contract, batchId 같은 식별자.
+        ③코루틴에서는 <code>MDCContext</code>로 dispatcher 전환시도 유지.
+        주의: thread pool 재사용을 고려해 <strong>try-finally로 반드시 MDC.clear()</strong>. 안 하면 이전 요청의 값이 섞임.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Actuator를 프로덕션에서 안전하게 쓰려면?</div>
+      <div class="a">
+        A. 기본 설정으로 모두 노출하면 정보 누출 위험. 필수 조치:
+        ①<strong>노출 엔드포인트 제한</strong>: <code>management.endpoints.web.exposure.include: health,info,metrics,prometheus</code>.
+        ②<strong>별도 포트</strong>: <code>management.server.port: 8081</code>로 외부 공개 포트(8080)와 분리, 8081은 내부망만.
+        ③<strong>인증</strong>: Spring Security로 <code>/actuator/**</code> 보호 (특히 loggers, heapdump, env).
+        ④<strong>민감 정보 숨김</strong>: <code>management.endpoint.env.show-values: when-authorized</code>.
+        ⑤<strong>Kubernetes</strong>: <code>health/liveness</code>, <code>health/readiness</code> 분리로 probe 용도 분리.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 어떤 메트릭을 핵심으로 보시나요?</div>
+      <div class="a">
+        A. <strong>RED</strong> 방식으로 보통 정리:
+        <strong>R</strong>ate(초당 요청 수), <strong>E</strong>rrors(5xx 비율), <strong>D</strong>uration(p50/p95/p99 지연).
+        또는 <strong>USE</strong>(Utilization/Saturation/Errors) — 시스템 리소스 관점.
+        실무에선: ①<code>http_server_requests_seconds</code>의 rate/duration, ②<code>jvm_memory_used</code> 및 <code>jvm_gc_pause</code>, ③HikariCP <code>hikaricp_connections_usage</code>, ④비즈니스 카운터(주문수, 결제 성공률), ⑤외부 API 호출 성공률/지연.
+        <strong>SLO(Service Level Objective)</strong>를 먼저 정의하고("p95 &lt; 200ms, error rate &lt; 0.1%") 거기서 필요한 메트릭을 결정.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 로그 레벨은 어떻게 쓰시나요?</div>
+      <div class="a">
+        A.
+        ①<strong>ERROR</strong>: 시스템에 문제 발생, 즉각 조치 필요. 예: DB 연결 실패, 중요 비즈니스 로직 실패.
+        ②<strong>WARN</strong>: 문제는 아니지만 주의. 예: 재시도, deprecated API 사용, fallback 발생.
+        ③<strong>INFO</strong>: 주요 이벤트. 예: 앱 시작/종료, 주문 생성/취소 같은 비즈니스 이벤트.
+        ④<strong>DEBUG</strong>: 개발/디버깅 시 상세 정보. 프로덕션 기본은 INFO.
+        ⑤<strong>TRACE</strong>: 매우 상세 (메서드 진입/종료 등). 거의 안 씀.
+        프로덕션은 INFO로 고정, 문제 발생시 <code>/actuator/loggers</code>로 특정 패키지만 DEBUG로 임시 변경.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li><strong>Logs + Metrics + Traces</strong> 세 가지를 함께 (각각 다른 역할)</li>
+        <li><strong>MDC</strong>로 로그에 컨텍스트(traceId, userId) 자동 주입</li>
+        <li>구조화 로깅 (JSON) + ELK/Loki로 검색 가능한 로그</li>
+        <li><strong>Actuator + Micrometer</strong>로 /health, /metrics 자동 제공</li>
+        <li>Prometheus로 수집, Grafana로 시각화, Alertmanager로 알림</li>
+        <li>분산 추적은 Micrometer Tracing + Zipkin/Jaeger</li>
+        <li>SLO 정의 → RED 메트릭 → actionable alert 설계</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="13-testing.html">&larr; 이전: 테스팅</a>
+      <a href="15-ci-cd-aws.html">다음: CI/CD + AWS &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-xml-doc.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>06 - 코루틴 | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .code-py::before { content: "Python asyncio"; display: block; padding: 6px 12px; background: #10b981; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .code-kt::before { content: "Kotlin Coroutine"; display: block; padding: 6px 12px; background: #3b82f6; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .side-by-side pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-project .file-ref { font-size: 12px; color: #6b7280; font-family: monospace; background: white; padding: 2px 6px; border-radius: 4px; }
+    .box-anti { border-left: 4px solid #ef4444; background: #fef2f2; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .box-anti .box-title { color: #dc2626; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+
+    .thread-viz {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0;
+    }
+    .thread-col { padding: 16px; border-radius: 10px; }
+    .thread-col.threads { background: #fef3c7; border: 2px solid #f59e0b; }
+    .thread-col.coroutines { background: #ecfdf5; border: 2px solid #10b981; }
+    .thread-dot { display: inline-block; width: 12px; height: 12px; background: #dc2626; border-radius: 2px; margin: 2px; }
+    .cor-dot { display: inline-block; width: 6px; height: 6px; background: #10b981; border-radius: 50%; margin: 1px; }
+
+    .hierarchy-tree {
+      padding: 20px; background: #f9fafb; border-radius: 12px; margin: 20px 0;
+    }
+    .tree-node {
+      padding: 8px 14px; background: white; border: 2px solid #3b82f6;
+      border-radius: 6px; display: inline-block; font-family: monospace; font-size: 13px;
+    }
+    .tree-node.root { border-color: #7c3aed; font-weight: 700; }
+    .tree-node.failed { border-color: #dc2626; background: #fef2f2; }
+    .tree-conn { margin-left: 20px; padding-left: 20px; border-left: 2px dashed #9ca3af; margin-top: 8px; }
+
+    .dispatcher-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px; margin: 16px 0;
+    }
+    .dispatcher-card {
+      padding: 14px; background: white; border: 1px solid #e5e7eb; border-radius: 8px;
+      border-top: 4px solid;
+    }
+    .dispatcher-card.default { border-top-color: #3b82f6; }
+    .dispatcher-card.io { border-top-color: #10b981; }
+    .dispatcher-card.main { border-top-color: #f59e0b; }
+    .dispatcher-card.unconfined { border-top-color: #8b5cf6; }
+    .dispatcher-card h4 { margin: 0 0 6px 0; font-family: monospace; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>06 - Kotlin Coroutines</h1>
+      <p class="subtitle">Python asyncio 개발자를 위한 구조화된 동시성</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#why">왜 코루틴인가: Thread/async 비교</a></li>
+        <li><a href="#suspend">suspend 함수</a></li>
+        <li><a href="#scope">CoroutineScope와 Job</a></li>
+        <li><a href="#launch-async">launch vs async</a></li>
+        <li><a href="#dispatcher">Dispatcher</a></li>
+        <li><a href="#structured">구조화된 동시성 (핵심 철학)</a></li>
+        <li><a href="#supervisor">coroutineScope vs supervisorScope</a></li>
+        <li><a href="#context">withContext와 Dispatcher 전환</a></li>
+        <li><a href="#cancel">취소 (Cancellation)</a></li>
+        <li><a href="#error">에러 처리</a></li>
+        <li><a href="#flow">Flow (개괄)</a></li>
+        <li><a href="#project">gate-futures-bot 실제 사용 (다수)</a></li>
+        <li><a href="#anti">흔한 실수 / 안티패턴</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="why"><span class="section-num">1</span> 왜 코루틴인가</h2>
+    <p>
+      동시성 처리 방식은 크게 3가지:
+      <strong>OS 스레드</strong>(무겁고 비쌈),
+      <strong>async/await</strong>(이벤트 루프 기반, 단일 스레드),
+      <strong>코루틴</strong>(경량 스레드 + 스레드 풀).
+      Kotlin 코루틴은 Python asyncio의 "구조화된 버전 + 멀티 스레드 분산".
+    </p>
+
+    <div class="thread-viz">
+      <div class="thread-col threads">
+        <h4>Thread (OS 스레드)</h4>
+        <p style="font-size: 13px; margin: 0 0 8px;">
+          각 스레드 = ~1MB 스택. 수천 개 넘으면 OOM.<br>
+          컨텍스트 스위칭 비용 큼.
+        </p>
+        <div>
+          <span class="thread-dot"></span><span class="thread-dot"></span><span class="thread-dot"></span>
+          <span class="thread-dot"></span><span class="thread-dot"></span>
+          <span style="font-size: 12px;"> ← 5개 ~5MB</span>
+        </div>
+        <div style="font-size: 12px; margin-top: 8px;">동시 처리: <b>수백</b> 수준</div>
+      </div>
+      <div class="thread-col coroutines">
+        <h4>Coroutine (경량)</h4>
+        <p style="font-size: 13px; margin: 0 0 8px;">
+          각 코루틴 = ~수백 바이트. 스택 없음(continuation).<br>
+          스레드 풀 재사용 → 적은 스레드로 많은 작업.
+        </p>
+        <div>
+          <span class="cor-dot"></span><span class="cor-dot"></span><span class="cor-dot"></span>
+          <span class="cor-dot"></span><span class="cor-dot"></span><span class="cor-dot"></span>
+          <span class="cor-dot"></span><span class="cor-dot"></span><span class="cor-dot"></span>
+          <span class="cor-dot"></span><span class="cor-dot"></span><span class="cor-dot"></span>
+          <span class="cor-dot"></span><span class="cor-dot"></span><span class="cor-dot"></span>
+          <span style="font-size: 12px;"> ← 15개 ~수KB</span>
+        </div>
+        <div style="font-size: 12px; margin-top: 8px;">동시 처리: <b>수십~수백만</b></div>
+      </div>
+    </div>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">import asyncio
+
+async def fetch(url):
+    # await로 논블로킹 대기
+    async with httpx.AsyncClient() as c:
+        r = await c.get(url)
+        return r.text
+
+async def main():
+    # 여러 요청 동시 실행
+    urls = ["u1", "u2", "u3"]
+    results = await asyncio.gather(*[fetch(u) for u in urls])
+    print(results)
+
+asyncio.run(main())</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">import kotlinx.coroutines.*
+
+// suspend = await 가능한 함수
+suspend fun fetch(url: String): String {
+    // HTTP 클라이언트의 suspend API
+    return httpClient.get(url).body()
+}
+
+suspend fun main() = coroutineScope {
+    val urls = listOf("u1", "u2", "u3")
+    val results = urls.map { url ->
+        async { fetch(url) }   // 동시 시작
+    }.awaitAll()              // 모두 대기
+    println(results)
+}</code></pre>
+      </div>
+    </div>
+
+    <h2 id="suspend"><span class="section-num">2</span> suspend 함수</h2>
+    <p>
+      <code>suspend</code> 키워드가 붙은 함수는 <strong>중단/재개가 가능</strong>합니다. Python <code>async def</code>에 대응.
+      실행 중 <code>delay</code>, <code>await</code>, HTTP 호출 등을 만나면 스레드를 <strong>블록하지 않고 양보</strong>하고, 결과가 돌아오면 재개됩니다.
+    </p>
+
+<pre><code class="language-kotlin">// suspend 함수는 다른 suspend 함수나 코루틴 빌더에서만 호출
+suspend fun loadUser(id: Long): User {
+    delay(100)  // 논블로킹 대기 (Thread.sleep 아님!)
+    return httpClient.get("/users/$id").body()
+}
+
+// 일반 함수에서 호출하려면 launch/runBlocking 등 필요
+fun regularFunction() {
+    // loadUser(1)  // ← 컴파일 에러
+
+    runBlocking {           // 일반 → 코루틴 진입점
+        val user = loadUser(1)  // OK
+        println(user)
+    }
+}</code></pre>
+
+    <div class="box box-info">
+      <div class="box-title">suspend의 핵심 규칙</div>
+      <ul>
+        <li><strong>suspend 함수는 suspend 함수/코루틴 안에서만 호출</strong></li>
+        <li>내부적으로 <code>Continuation&lt;T&gt;</code>을 파라미터로 받는 일반 함수로 컴파일 (CPS transform)</li>
+        <li><code>Thread.sleep</code> 대신 <code>delay</code>, blocking IO 대신 suspend IO 써야 효과 있음</li>
+        <li>suspend 함수 자체는 <strong>스레드를 블록하지 않는다는 "약속"</strong> — 개발자가 책임</li>
+      </ul>
+    </div>
+
+    <h2 id="scope"><span class="section-num">3</span> CoroutineScope와 Job</h2>
+    <p>
+      모든 코루틴은 <strong>어떤 scope에 속해야 합니다</strong> (고아 코루틴 금지).
+      Scope는 "이 scope의 모든 자식 코루틴을 함께 관리"한다는 생명주기 단위.
+    </p>
+
+<pre><code class="language-kotlin">// Scope 만드는 법
+val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+// launch: 새 코루틴을 시작 (Job 반환)
+val job: Job = scope.launch {
+    loadAndProcess()
+}
+
+// Job으로 제어
+job.cancel()            // 취소
+job.join()              // 완료 대기
+job.isActive            // 실행 중?
+job.isCompleted         // 완료됨?
+job.isCancelled         // 취소됨?
+
+// scope 전체 취소 (자식까지)
+scope.cancel()</code></pre>
+
+    <h3>Scope의 구조</h3>
+    <div class="hierarchy-tree">
+      <div class="tree-node root">CoroutineScope</div>
+      <div class="tree-conn">
+        <div class="tree-node">Job (부모)</div>
+        <div class="tree-conn">
+          <div class="tree-node">child job 1 (launch)</div>
+          <div class="tree-node" style="margin-left: 8px;">child job 2 (async)</div>
+          <div class="tree-node" style="margin-left: 8px;">child job 3</div>
+        </div>
+      </div>
+    </div>
+    <p style="font-size: 13px; color: #6b7280;">
+      자식 Job 중 하나라도 실패하면 → 부모 전체 취소 → 형제들도 취소 (기본 <code>Job()</code>).<br>
+      <code>SupervisorJob</code>은 이 전파를 막음.
+    </p>
+
+    <h2 id="launch-async"><span class="section-num">4</span> launch vs async</h2>
+    <p>두 가지 코루틴 빌더 — 결과값 유무로 구분.</p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">import asyncio
+
+# fire-and-forget
+asyncio.create_task(do_work())
+
+# 결과가 필요한 경우
+task = asyncio.create_task(load_user(1))
+user = await task
+
+# 병렬 실행
+results = await asyncio.gather(
+    load_user(1),
+    load_user(2),
+    load_user(3)
+)</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">// launch: fire-and-forget (Job 반환, 결과 없음)
+scope.launch {
+    doWork()
+}
+
+// async: 결과 필요 (Deferred&lt;T&gt; 반환)
+val deferred: Deferred&lt;User&gt; = scope.async {
+    loadUser(1)
+}
+val user = deferred.await()
+
+// 병렬
+coroutineScope {
+    val a = async { loadUser(1) }
+    val b = async { loadUser(2) }
+    val c = async { loadUser(3) }
+    listOf(a.await(), b.await(), c.await())
+}
+
+// or: awaitAll
+listOf(1, 2, 3).map { id ->
+    async { loadUser(id) }
+}.awaitAll()</code></pre>
+      </div>
+    </div>
+
+    <h2 id="dispatcher"><span class="section-num">5</span> Dispatcher</h2>
+    <p>
+      "코루틴을 어떤 스레드 풀에서 실행할지" 결정. Python asyncio는 단일 이벤트 루프이지만, Kotlin은 <strong>용도별 스레드 풀</strong>을 선택할 수 있습니다.
+    </p>
+
+    <div class="dispatcher-grid">
+      <div class="dispatcher-card default">
+        <h4>Dispatchers.Default</h4>
+        <p style="font-size: 13px; margin: 0;"><strong>CPU 연산용</strong>. 코어 수만큼 스레드. 정렬, 계산, 파싱 등.</p>
+      </div>
+      <div class="dispatcher-card io">
+        <h4>Dispatchers.IO</h4>
+        <p style="font-size: 13px; margin: 0;"><strong>IO 바운드용</strong>. 64+ 탄력적 스레드. HTTP, DB, 파일 IO.</p>
+      </div>
+      <div class="dispatcher-card main">
+        <h4>Dispatchers.Main</h4>
+        <p style="font-size: 13px; margin: 0;"><strong>UI 스레드</strong>(Android). 서버에선 거의 안 씀.</p>
+      </div>
+      <div class="dispatcher-card unconfined">
+        <h4>Dispatchers.Unconfined</h4>
+        <p style="font-size: 13px; margin: 0;"><strong>특수 용도</strong>. 호출 스레드에서 즉시 실행, 첫 suspend 후 재개 스레드로 이동.</p>
+      </div>
+    </div>
+
+<pre><code class="language-kotlin">// scope 생성시 지정
+val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+// 빌더에서 override
+scope.launch(Dispatchers.Default) {
+    heavyCpuWork()
+}
+
+// 중간에 전환 — withContext
+suspend fun loadAndProcess() {
+    val raw = withContext(Dispatchers.IO) {
+        httpClient.get("/data").body&lt;String&gt;()  // IO 풀에서 실행
+    }
+    val parsed = withContext(Dispatchers.Default) {
+        parseHeavyJson(raw)  // CPU 풀로 전환
+    }
+    // 함수 리턴 시점엔 원래 Dispatcher로 복귀
+}</code></pre>
+
+    <h2 id="structured"><span class="section-num">6</span> 구조화된 동시성 (⭐ 철학의 핵심)</h2>
+    <p>
+      <strong>모든 코루틴은 부모 scope에 속하고, 부모는 자식이 끝날 때까지 기다린다</strong>는 원칙.
+      asyncio의 "task leak" 문제를 구조적으로 차단.
+    </p>
+
+<pre><code class="language-kotlin">suspend fun loadUserData(userId: Long): UserData = coroutineScope {
+    // 이 블록 안의 모든 자식이 끝나야 coroutineScope가 리턴
+    val profile = async { loadProfile(userId) }
+    val posts   = async { loadPosts(userId) }
+    val friends = async { loadFriends(userId) }
+    UserData(profile.await(), posts.await(), friends.await())
+    // 하나라도 실패하면 형제들 cancel
+    // coroutineScope도 예외 전파
+}</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">구조화 동시성의 이점</div>
+      <ol>
+        <li><strong>누수 방지</strong>: 부모가 종료되면 자식도 자동 종료. "떠도는 task"가 없음</li>
+        <li><strong>에러 전파</strong>: 자식 실패가 부모까지 올라감 — try/catch로 잡을 수 있음</li>
+        <li><strong>취소 전파</strong>: 부모 취소시 자식 모두 취소</li>
+        <li><strong>스코프 = 생명주기</strong>: 명시적 계층으로 추적 가능</li>
+      </ol>
+    </div>
+
+    <h2 id="supervisor"><span class="section-num">7</span> coroutineScope vs supervisorScope</h2>
+    <p>
+      <strong>자식 실패를 형제에 전파할지</strong>가 차이.
+    </p>
+
+<pre><code class="language-kotlin">// coroutineScope: 자식 1개 실패 → 전체 취소
+coroutineScope {
+    launch { loadA() }        // 이 중 하나 실패하면
+    launch { loadB() }        // 나머지도 모두 취소
+    launch { loadC() }
+}
+
+// supervisorScope: 자식 실패가 형제에 전파 안 됨
+supervisorScope {
+    launch { loadA() }        // 실패해도
+    launch { loadB() }        // B, C는 계속 실행
+    launch { loadC() }
+}</code></pre>
+
+    <div class="box-project">
+      <div class="box-title">프로젝트 사용 예: 워커 에러 격리</div>
+      <span class="file-ref">src/main/kotlin/.../worker/WorkerOrchestrator.kt</span>
+<pre style="margin-top: 8px;"><code class="language-kotlin">suspend fun runAll(strategyProvider: (String) -> TradingStrategy) =
+    supervisorScope {
+        botProperties.contracts.forEach { contract ->
+            launch { createWorker(contract, strategyProvider(contract)).run() }
+        }
+    }</code></pre>
+      <p style="margin: 8px 0 0; font-size: 13px;">
+        매매봇에서 BTC 워커가 예외로 죽어도 ETH/SOL 워커는 계속 돌아야 함.
+        <code>supervisorScope</code>가 형제 워커를 보호.
+      </p>
+    </div>
+
+    <h2 id="context"><span class="section-num">8</span> withContext와 Dispatcher 전환</h2>
+    <p>
+      suspend 함수 내부에서 <strong>일시적으로 다른 Dispatcher에서 실행</strong>하고 결과만 받기. <code>async+await</code>과 비슷하지만 단일 작업용.
+    </p>
+
+<pre><code class="language-kotlin">suspend fun processImage(id: Long): Image {
+    // IO로 다운로드
+    val bytes: ByteArray = withContext(Dispatchers.IO) {
+        httpClient.get("/image/$id").body()
+    }
+    // CPU로 디코딩
+    val image: Image = withContext(Dispatchers.Default) {
+        decodeImage(bytes)  // 무거운 연산
+    }
+    return image
+}</code></pre>
+
+    <h2 id="cancel"><span class="section-num">9</span> 취소 (Cancellation)</h2>
+    <p>
+      코루틴 취소는 <strong>협력적</strong>: 코루틴이 <strong>suspend point에서 체크</strong>하고 스스로 종료합니다.
+    </p>
+
+<pre><code class="language-kotlin">val job = scope.launch {
+    while (isActive) {       // 취소 체크
+        doWork()
+        delay(100)           // suspend point — 취소 체크
+    }
+}
+
+delay(500)
+job.cancel()     // 다음 suspend point에서 CancellationException
+job.join()       // 완전 종료 대기
+// 또는 cancelAndJoin()
+
+// 취소를 일반 예외처럼 잡으면 안 됨
+suspend fun doWork() {
+    try {
+        riskyCall()
+    } catch (e: CancellationException) {
+        throw e   // 반드시 rethrow
+    } catch (e: Exception) {
+        logger.error(e)
+    }
+}</code></pre>
+
+    <div class="box-anti">
+      <div class="box-title">CancellationException을 삼키지 마라</div>
+      <p>
+        <code>catch (e: Exception)</code>은 <code>CancellationException</code>도 잡습니다(Exception의 하위).
+        이걸 삼키면 취소 신호가 무시되어 <strong>좀비 코루틴</strong>이 됩니다.
+        <strong>항상 <code>CancellationException</code>을 따로 잡아 rethrow</strong>하거나,
+        <code>runCatching</code> 대신 명시적 try/catch 사용.
+      </p>
+    </div>
+
+    <div class="box-project">
+      <div class="box-title">프로젝트 사용 예: CancellationException rethrow</div>
+      <span class="file-ref">src/main/kotlin/.../worker/CoinWorker.kt</span>
+<pre style="margin-top: 8px;"><code class="language-kotlin">internal suspend fun runOnce() {
+    try {
+        rateLimiter.acquire()
+        // ... 비즈니스 로직
+    } catch (e: CancellationException) {
+        throw e   // ← 반드시 rethrow, 그래야 워커 graceful shutdown
+    } catch (e: Exception) {
+        logger.error("워커 iteration 에러", e)
+    }
+}</code></pre>
+    </div>
+
+    <h2 id="error"><span class="section-num">10</span> 에러 처리</h2>
+
+<pre><code class="language-kotlin">// 1. suspend 함수 내부: try/catch 그대로
+suspend fun loadUser(id: Long): User = try {
+    httpClient.get("/users/$id").body()
+} catch (e: HttpException) {
+    throw UserNotFoundException(id, e)
+}
+
+// 2. coroutineScope + 자식 실패: 부모로 전파
+suspend fun loadAll(): List&lt;User&gt; = try {
+    coroutineScope {
+        (1..5).map { async { loadUser(it.toLong()) } }.awaitAll()
+    }
+} catch (e: HttpException) {
+    // 자식 중 하나라도 실패하면 여기서 잡힘
+    emptyList()
+}
+
+// 3. launch + 글로벌 에러 핸들러
+val handler = CoroutineExceptionHandler { _, e ->
+    logger.error("코루틴 에러", e)
+}
+scope.launch(handler) { /* ... */ }
+// 주의: handler는 launch에만 작동, async의 예외는 await()에서 던져짐</code></pre>
+
+    <h2 id="flow"><span class="section-num">11</span> Flow (개괄)</h2>
+    <p>
+      <strong>Cold stream</strong>. Python의 async generator와 유사. 시간에 따라 방출되는 값들의 시퀀스.
+      RxJava/Reactor 대체, 서버에서도 많이 쓰임(Kafka 컨슈머, WebSocket, 실시간 데이터).
+    </p>
+
+<pre><code class="language-kotlin">// Flow 생성
+fun priceUpdates(): Flow&lt;Double&gt; = flow {
+    while (true) {
+        val price = fetchPrice()
+        emit(price)          // 방출
+        delay(1000)
+    }
+}
+
+// 수집 (consumer) — terminal operator
+suspend fun main() {
+    priceUpdates()
+        .filter { it > 100 }
+        .map { "현재가: $it" }
+        .collect { println(it) }   // collect가 실제 실행 트리거
+}
+
+// Cold 특성: collect 할 때마다 새로 실행
+// Hot이 필요하면 SharedFlow / StateFlow
+
+// 조합
+combine(priceFlow, volumeFlow) { p, v -> "$p x $v" }
+    .collect { println(it) }</code></pre>
+
+    <h2 id="project"><span class="section-num">12</span> gate-futures-bot 실제 사용</h2>
+
+    <h3>12.1 BotRunner: Spring 생명주기 ↔ 코루틴 연결</h3>
+    <span class="file-ref">src/main/kotlin/.../worker/BotRunner.kt</span>
+<pre><code class="language-kotlin">@Component
+class BotRunner(
+    private val orchestrator: WorkerOrchestrator,
+    private val assembler: StrategyAssembler,
+    /* ... */
+) {
+    // IO dispatcher + SupervisorJob으로 scope 구성
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var job: Job? = null
+
+    @EventListener(ApplicationReadyEvent::class)
+    fun start() {
+        job = scope.launch {
+            orchestrator.runAll { contract -> assembler.forContract(contract) }
+        }
+    }
+
+    @PreDestroy
+    fun stop() {
+        val current = job ?: return
+        runBlocking { current.cancelAndJoin() }  // 동기 콜백에서 코루틴 정리
+        scope.cancel()
+    }
+}</code></pre>
+    <p>
+      포인트: Spring은 동기 생명주기(<code>@PreDestroy</code>)를 기대하는데, 코루틴 정리는 suspend 작업.
+      <code>runBlocking</code>으로 브리지하는 관용구.
+    </p>
+
+    <h3>12.2 WorkerOrchestrator: 병렬 워커 + 격리</h3>
+    <span class="file-ref">src/main/kotlin/.../worker/WorkerOrchestrator.kt</span>
+<pre><code class="language-kotlin">suspend fun runAll(strategyProvider: (String) -> TradingStrategy) =
+    supervisorScope {
+        // 각 coin을 별개 launch로 띄움 → 수십 코인도 경량 코루틴으로 커버
+        botProperties.contracts.forEach { contract ->
+            launch { createWorker(contract, strategyProvider(contract)).run() }
+        }
+        // supervisorScope: BTC 워커 실패가 ETH 워커에 전파 X
+    }</code></pre>
+
+    <h3>12.3 CoinWorker: suspend 루프 + cancellation</h3>
+    <span class="file-ref">src/main/kotlin/.../worker/CoinWorker.kt</span>
+<pre><code class="language-kotlin">suspend fun run() {
+    MDC.put("contract", contract)
+    try {
+        while (currentCoroutineContext().isActive) {   // 취소 체크
+            runOnce()
+            delay(config.checkIntervalMillis)          // suspend point
+        }
+    } finally {
+        logger.info("워커 종료")
+        MDC.remove("contract")
+    }
+}
+
+internal suspend fun runOnce() {
+    try {
+        rateLimiter.acquire()  // suspend!
+        // ... 로직
+    } catch (e: CancellationException) {
+        throw e  // graceful shutdown 위해 rethrow
+    } catch (e: Exception) {
+        logger.error("워커 iteration 에러", e)
+    }
+}</code></pre>
+
+    <h3>12.4 InMemoryRateLimiter: Mutex + delay</h3>
+    <span class="file-ref">src/main/kotlin/.../ratelimit/InMemoryRateLimiter.kt</span>
+<pre><code class="language-kotlin">@Component
+class InMemoryRateLimiter(/* ... */) : RateLimiter {
+    private val mutex = Mutex()   // kotlinx.coroutines.sync.Mutex (suspend lock)
+
+    override suspend fun acquire() {
+        while (true) {
+            val waitMillis: Long? = mutex.withLock {
+                refill()
+                if (tokens >= 1.0) {
+                    tokens -= 1.0
+                    null   // 획득 성공
+                } else {
+                    // 부족한 토큰이 생길 때까지의 ms
+                    ((1.0 - tokens) / refillPerSec * 1_000).toLong()
+                }
+            }
+            if (waitMillis == null) return
+            delay(waitMillis)  // ← lock 바깥에서 대기 (다른 코루틴 진입 허용)
+        }
+    }
+}</code></pre>
+    <p>
+      핵심 포인트: <strong>Mutex 안에서 suspend 함수 호출 금지</strong> 관용구.
+      lock은 원자적 state 수정에만 쓰고, <code>delay</code>는 lock 밖에서.
+    </p>
+
+    <h3>12.5 테스트: runTest / runBlocking</h3>
+    <span class="file-ref">src/test/kotlin/.../worker/CoinWorkerTest.kt</span>
+<pre><code class="language-kotlin">@Test
+fun `runOnce opens long when signal`() = runTest {
+    // runTest: virtual time scheduler로 delay 무시
+    val worker = newWorker(...)
+    worker.runOnce()
+    verify(exactly = 1) { trader.openLong(contract, 1, 5) }
+}
+
+@Test
+fun `run exits gracefully on cancellation`() = runBlocking {
+    // 실시간 필요 (cancellation 동작 검증)
+    val worker = newWorker(...)
+    val job = launch { worker.run() }
+    yield()
+    job.cancelAndJoin()
+    assertTrue(job.isCancelled)
+}</code></pre>
+
+    <h2 id="anti"><span class="section-num">13</span> 흔한 실수 / 안티패턴</h2>
+
+    <div class="box-anti">
+      <div class="box-title">1. GlobalScope 사용</div>
+<pre style="margin: 8px 0;"><code class="language-kotlin">// ❌ 안티
+GlobalScope.launch { loadUser() }
+
+// ✅ 좋음
+val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+scope.launch { loadUser() }
+// 또는 suspend 함수 + coroutineScope</code></pre>
+      <p style="margin: 8px 0 0; font-size: 13px;">
+        GlobalScope는 lifecycle이 앱 전체 — 취소/에러 관리 불가. 구조화 동시성 위반.
+      </p>
+    </div>
+
+    <div class="box-anti">
+      <div class="box-title">2. suspend에서 blocking 함수 호출</div>
+<pre style="margin: 8px 0;"><code class="language-kotlin">// ❌ Thread 블록 — 다른 코루틴이 이 스레드를 못 씀
+suspend fun bad() {
+    Thread.sleep(1000)     // Dispatchers.IO 스레드 블록!
+    val r = blockingHttp.get("...")  // 동기 IO
+}
+
+// ✅ suspend API 사용
+suspend fun good() {
+    delay(1000)
+    val r = suspendHttp.get("...")  // suspend API
+}
+
+// ✅ blocking이 불가피하면 IO 풀로
+suspend fun acceptable() = withContext(Dispatchers.IO) {
+    legacyBlockingCall()   // IO 풀은 블록 허용 (확장 가능)
+}</code></pre>
+    </div>
+
+    <div class="box-anti">
+      <div class="box-title">3. CancellationException 삼키기</div>
+<pre style="margin: 8px 0;"><code class="language-kotlin">// ❌ 취소 신호 무시
+try { work() } catch (e: Exception) { log(e) }
+
+// ✅ rethrow
+try {
+    work()
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Exception) {
+    log(e)
+}
+
+// 또는 catch 순서로
+try { work() }
+catch (e: CancellationException) { throw e }
+catch (e: Exception) { log(e) }</code></pre>
+    </div>
+
+    <div class="box-anti">
+      <div class="box-title">4. launch 안 예외 무시</div>
+<pre style="margin: 8px 0;"><code class="language-kotlin">// launch의 예외는 자동 전파 → 부모 scope 관리
+// async의 예외는 await() 해야 던져짐
+
+val deferred = async { risky() }
+// deferred.await() 안 하면 예외 소실!
+// (또는 scope가 취소되면서 보고되긴 함)</code></pre>
+    </div>
+
+    <h2 id="interview"><span class="section-num">14</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. 코루틴과 스레드의 차이를 설명해주세요.</div>
+      <div class="a">
+        A. 스레드는 OS가 스케줄링하는 실행 단위로 생성 비용이 크고(~1MB 스택) 컨텍스트 스위칭이 비쌉니다. 코루틴은 JVM 레벨의 경량 실행 단위로 <strong>continuation</strong>(다음 실행 위치를 가진 객체)으로 표현됩니다. 하나의 스레드에 수천 개의 코루틴이 실행될 수 있고, suspend point에서 자발적으로 양보하는 방식입니다. 서버 애플리케이션에선 <strong>많은 IO 대기</strong>를 적은 스레드로 처리할 수 있어 메모리/GC 효율이 좋습니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>coroutineScope</code>와 <code>supervisorScope</code>의 차이는?</div>
+      <div class="a">
+        A. <strong>자식 실패의 전파 여부</strong>가 차이입니다. <code>coroutineScope</code>는 자식 중 하나가 실패하면 <strong>형제 모두 취소</strong>하고 부모에게 예외 전파. <code>supervisorScope</code>는 자식 실패가 형제에 전파되지 않음. 실전 예: 매매봇에서 여러 코인 워커를 병렬로 돌릴 때, BTC 워커가 실패해도 ETH 워커가 계속 돌아야 하므로 <code>supervisorScope</code>. 반면 "모든 데이터가 필요한 aggregation"에선 하나라도 실패하면 의미 없으니 <code>coroutineScope</code>.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Dispatcher의 종류와 용도는?</div>
+      <div class="a">
+        A.
+        <strong>Default</strong>: CPU 코어 수만큼의 스레드. 정렬/계산/파싱 등 CPU 바운드.
+        <strong>IO</strong>: 64+ 탄력적 스레드(블록 허용). HTTP/DB/파일 IO.
+        <strong>Main</strong>: Android UI 스레드. 서버에선 거의 안 씀.
+        <strong>Unconfined</strong>: 호출 스레드에서 즉시 실행, 첫 suspend 후 재개 스레드로. 테스트나 특수 상황에만.
+        일반 백엔드는 IO dispatcher가 기본이고, 무거운 연산만 <code>withContext(Default)</code>로 전환.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 구조화된 동시성(Structured Concurrency)이 해결하는 문제는?</div>
+      <div class="a">
+        A. 비구조적 동시성(GlobalScope, fire-and-forget)의 3가지 문제:
+        ①<strong>leak</strong>: 부모 종료 후 자식이 계속 돌아 리소스 누수.
+        ②<strong>에러 소실</strong>: 자식 예외가 부모로 전파 안 돼 디버깅 어려움.
+        ③<strong>취소 관리 불가</strong>: 모든 관련 작업을 개별 추적해야 함.
+        구조화된 동시성은 "모든 코루틴은 scope에 속하고, 부모는 자식 완료를 기다린다"는 원칙으로 이 문제들을 해결. Kotlin은 <code>coroutineScope</code>/<code>supervisorScope</code>/<code>runBlocking</code> 빌더로 이 원칙을 강제합니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>async</code>와 <code>launch</code>는 언제 각각 쓰나요?</div>
+      <div class="a">
+        A. <code>launch</code>는 <strong>fire-and-forget</strong>(결과 없음). <code>Job</code>을 반환하며 취소/완료 추적용. <code>async</code>는 <strong>결과가 필요할 때</strong>. <code>Deferred&lt;T&gt;</code>(Future 같은 것)를 반환하고 <code>await()</code>로 결과 수신. <strong>예외 처리도 다름</strong>: launch의 예외는 부모 scope로 전파, async의 예외는 await() 시점에 던져집니다. 여러 작업을 병렬 실행 후 결과를 모으려면 <code>async</code> + <code>awaitAll()</code>.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Python asyncio와의 차이를 한 문장으로?</div>
+      <div class="a">
+        A. asyncio는 <strong>단일 이벤트 루프</strong>에서 async 함수를 스케줄링하는 반면, Kotlin 코루틴은 <strong>여러 Dispatcher(스레드 풀)</strong>에 걸친 경량 실행 단위로 <strong>구조화된 동시성</strong>과 <strong>CPU/IO 워크로드 분리</strong>를 언어 차원에서 지원합니다. 또한 Flow를 통해 cold/hot 스트림을 통합합니다.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li><strong>suspend</strong> = 중단/재개 가능 함수. 다른 suspend 또는 코루틴 빌더에서만 호출</li>
+        <li><strong>CoroutineScope</strong> = 생명주기. 모든 코루틴은 scope에 속함 (구조화된 동시성)</li>
+        <li><strong>launch</strong> = fire-and-forget, <strong>async</strong> = 결과가 있는 병렬 작업</li>
+        <li><strong>Dispatchers</strong>: Default(CPU) / IO(블록 허용) / Main(UI)</li>
+        <li><strong>supervisorScope</strong>: 자식 실패 격리 (워커 패턴에 필수)</li>
+        <li><strong>CancellationException</strong>은 삼키지 말고 rethrow</li>
+        <li><strong>Mutex</strong>는 원자적 state 변경만, <code>delay</code>는 lock 밖에서</li>
+        <li>테스트는 <code>runTest</code>(virtual time) 또는 <code>runBlocking</code>(실시간)</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="05-kotlin-collections.html">&larr; 이전: 컬렉션</a>
+      <a href="07-gradle.html">다음: Gradle 빌드 &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

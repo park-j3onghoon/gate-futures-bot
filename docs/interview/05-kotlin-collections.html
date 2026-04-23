@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>05 - 컬렉션 API | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .code-py::before { content: "Python"; display: block; padding: 6px 12px; background: #10b981; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .code-kt::before { content: "Kotlin"; display: block; padding: 6px 12px; background: #3b82f6; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .side-by-side pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-project .file-ref { font-size: 12px; color: #6b7280; font-family: monospace; background: white; padding: 2px 6px; border-radius: 4px; }
+    .box-anti { border-left: 4px solid #ef4444; background: #fef2f2; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .box-anti .box-title { color: #dc2626; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+    .pipeline {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 16px; background: #f9fafb; border-radius: 8px; margin: 16px 0;
+      font-family: monospace; font-size: 13px;
+    }
+    .pipeline .step {
+      padding: 8px 14px; background: white; border: 2px solid #3b82f6;
+      border-radius: 20px;
+    }
+    .pipeline .arrow { color: #6b7280; font-size: 18px; font-weight: 700; }
+    .lazy-box {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0;
+    }
+    .lazy-box .col { padding: 16px; border-radius: 10px; }
+    .lazy-box .eager { background: #fef3c7; border: 2px solid #f59e0b; }
+    .lazy-box .lazy { background: #ecfdf5; border: 2px solid #10b981; }
+    .lazy-box h4 { margin: 0 0 8px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>05 - 컬렉션 API</h1>
+      <p class="subtitle">Python 리스트 내포/map/filter에 익숙한 사람을 위한 Kotlin Collection</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#types">컬렉션 타입 체계</a></li>
+        <li><a href="#create">컬렉션 생성</a></li>
+        <li><a href="#mutable">읽기 전용 vs 가변 (⭐)</a></li>
+        <li><a href="#basic-ops">기본 연산: map / filter / forEach</a></li>
+        <li><a href="#agg">집계: reduce / fold / sum / max</a></li>
+        <li><a href="#group">그룹핑: groupBy / associateBy / partition</a></li>
+        <li><a href="#flat">flatMap / zip / chunked / windowed</a></li>
+        <li><a href="#sort">정렬: sortedBy / sortedWith</a></li>
+        <li><a href="#sequence">Sequence (Python generator 대응)</a></li>
+        <li><a href="#project">gate-futures-bot에서 실제 사용</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="types"><span class="section-num">1</span> 컬렉션 타입 체계</h2>
+    <p>
+      Kotlin 컬렉션은 <strong>읽기 전용 인터페이스</strong>(<code>List</code>, <code>Set</code>, <code>Map</code>)와
+      <strong>가변 인터페이스</strong>(<code>MutableList</code>, <code>MutableSet</code>, <code>MutableMap</code>)로 분리됩니다.
+      Python은 list/dict/set이 기본적으로 가변이고 불변은 tuple/frozenset뿐인 것과 대비됩니다.
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Python</th><th>Kotlin 읽기 전용</th><th>Kotlin 가변</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>list</code></td><td><code>List&lt;T&gt;</code></td><td><code>MutableList&lt;T&gt;</code></td></tr>
+        <tr><td><code>dict</code></td><td><code>Map&lt;K, V&gt;</code></td><td><code>MutableMap&lt;K, V&gt;</code></td></tr>
+        <tr><td><code>set</code></td><td><code>Set&lt;T&gt;</code></td><td><code>MutableSet&lt;T&gt;</code></td></tr>
+        <tr><td><code>tuple</code></td><td><code>Pair, Triple</code> / data class</td><td>—</td></tr>
+        <tr><td><code>frozenset</code></td><td><code>Set&lt;T&gt;</code>의 immutable 구현</td><td>—</td></tr>
+      </tbody>
+    </table>
+
+    <div class="box box-info">
+      <div class="box-title">중요: "읽기 전용"은 "불변"이 아님</div>
+      <p>
+        Kotlin의 <code>List&lt;T&gt;</code>는 <strong>읽기 전용 뷰(view)</strong>입니다.
+        내부 구현은 여전히 <code>ArrayList</code>일 수 있고, <strong>다른 참조를 통해 변경될 수 있습니다</strong>.
+        진짜 불변이 필요하면 <code>List</code>로 받고 <code>.toList()</code>로 방어 복사하거나 <code>kotlinx.collections.immutable</code> 라이브러리 사용.
+      </p>
+    </div>
+
+    <h2 id="create"><span class="section-num">2</span> 컬렉션 생성</h2>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># list
+items = [1, 2, 3]
+empty = []
+range_list = list(range(1, 11))
+
+# dict
+config = {"host": "localhost", "port": 8080}
+empty_dict = {}
+
+# set
+tags = {"red", "blue"}
+empty_set = set()
+
+# 이해식
+squares = [x * x for x in range(5)]
+by_id = {user.id: user for user in users}</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">// List (읽기 전용)
+val items = listOf(1, 2, 3)
+val empty = emptyList&lt;Int&gt;()
+val range = (1..10).toList()
+
+// Map
+val config = mapOf("host" to "localhost", "port" to 8080)
+val emptyMap = emptyMap&lt;String, Any&gt;()
+
+// Set
+val tags = setOf("red", "blue")
+
+// 가변 버전
+val ml = mutableListOf(1, 2, 3)
+ml.add(4)
+val mm = mutableMapOf("a" to 1)
+mm["b"] = 2
+
+// Python 이해식 대응
+val squares = (0 until 5).map { it * it }
+val byId = users.associateBy { it.id }</code></pre>
+      </div>
+    </div>
+
+    <h3>생성 함수 레퍼런스</h3>
+<pre><code class="language-kotlin">// 자주 쓰는 생성
+listOf(1, 2, 3)              // List&lt;Int&gt;
+listOfNotNull(1, null, 3)    // [1, 3] — null 자동 제거
+List(5) { it * 2 }           // [0, 2, 4, 6, 8]
+mutableListOf&lt;String&gt;()
+arrayListOf(1, 2, 3)         // 명시적 ArrayList
+
+mapOf("a" to 1, "b" to 2)
+mutableMapOf&lt;String, Int&gt;()
+hashMapOf&lt;String, Int&gt;()     // HashMap
+linkedMapOf&lt;String, Int&gt;()   // 순서 유지
+
+setOf("a", "b")
+mutableSetOf&lt;String&gt;()
+linkedSetOf("a", "b")        // 순서 유지
+sortedSetOf(3, 1, 2)         // 정렬된 Set</code></pre>
+
+    <h2 id="mutable"><span class="section-num">3</span> 읽기 전용 vs 가변 (⭐ 중요)</h2>
+    <p>실무에서 <strong>함수 파라미터와 리턴 타입은 가능한 한 읽기 전용</strong>으로. 가변 타입은 지역 변수에서만.</p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># Python: 대부분 가변
+def process(items: list[int]) -> list[int]:
+    items.append(0)  # 호출자도 영향받음 (의도했나?)
+    return [x * 2 for x in items]
+
+# 방어: 복사
+def process2(items: list[int]) -> list[int]:
+    items = list(items)
+    items.append(0)
+    return [x * 2 for x in items]</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">// 읽기 전용이 기본 — 실수 방지
+fun process(items: List&lt;Int&gt;): List&lt;Int&gt; {
+    // items.add(0)  // 컴파일 에러!
+    return items.map { it * 2 }
+}
+
+// 가변이 꼭 필요한 경우만 명시
+fun aggregate(items: MutableList&lt;Int&gt;) {
+    items.add(0)
+}
+
+// 관용: 내부에선 mutable, 반환은 읽기 전용
+fun buildList(): List&lt;Int&gt; {
+    val result = mutableListOf&lt;Int&gt;()
+    for (i in 1..10) result.add(i * 2)
+    return result  // List&lt;Int&gt;로 암묵 upcast
+}</code></pre>
+      </div>
+    </div>
+
+    <h2 id="basic-ops"><span class="section-num">4</span> 기본 연산: map / filter / forEach</h2>
+    <p>Python의 list comprehension이 Kotlin에선 <strong>메서드 체이닝</strong>으로 표현됩니다.</p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">nums = [1, 2, 3, 4, 5]
+
+# map / filter
+doubled = [x * 2 for x in nums]
+evens = [x for x in nums if x % 2 == 0]
+
+# 결합
+result = [x * 2 for x in nums if x % 2 == 0]
+
+# forEach = for loop
+for n in nums:
+    print(n)
+
+# 함수로: filter/map
+list(map(lambda x: x * 2, nums))
+list(filter(lambda x: x > 2, nums))</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">val nums = listOf(1, 2, 3, 4, 5)
+
+// map / filter — 각각 새 List 반환
+val doubled = nums.map { it * 2 }        // [2, 4, 6, 8, 10]
+val evens = nums.filter { it % 2 == 0 }  // [2, 4]
+
+// 체이닝 (순서 중요)
+val result = nums
+    .filter { it % 2 == 0 }
+    .map { it * 2 }
+// [4, 8]
+
+// forEach — 단순 순회 (side effect 전용)
+nums.forEach { println(it) }
+
+// 인덱스와 함께
+nums.forEachIndexed { i, v -> println("$i: $v") }
+nums.mapIndexed { i, v -> "$i=$v" }</code></pre>
+      </div>
+    </div>
+
+    <h3>자주 쓰는 변형</h3>
+<pre><code class="language-kotlin">nums.mapNotNull { if (it > 2) it * 2 else null }  // [6, 8, 10]
+// map + filter를 한번에. null 결과는 자동 제거
+
+nums.filterNotNull()  // List&lt;T?&gt;에서 null 제거 → List&lt;T&gt;
+nums.filterIsInstance&lt;Int&gt;()  // 타입으로 필터
+
+nums.take(3)      // [1, 2, 3]
+nums.drop(2)      // [3, 4, 5]
+nums.takeLast(2)  // [4, 5]
+
+nums.find { it > 3 }       // 첫 번째 매치 또는 null
+nums.first { it > 3 }      // 없으면 NoSuchElement
+nums.any { it > 10 }       // false
+nums.all { it > 0 }        // true
+nums.count { it % 2 == 0 } // 2
+
+nums.distinct()          // 중복 제거
+nums.distinctBy { it % 2 }  // 기준으로 중복 제거
+nums.reversed()</code></pre>
+
+    <h2 id="agg"><span class="section-num">5</span> 집계: reduce / fold / sum / max</h2>
+
+<pre><code class="language-kotlin">val nums = listOf(1, 2, 3, 4, 5)
+
+// 숫자 집계
+nums.sum()                       // 15
+nums.max()                       // 5 (empty면 NoSuchElement)
+nums.maxOrNull()                 // 5
+nums.average()                   // 3.0
+
+// reduce: 첫 원소로 시작
+nums.reduce { acc, n -> acc + n } // 15
+// empty list면 예외. reduceOrNull() 있음
+
+// fold: 초기값 명시 (Python functools.reduce와 같음)
+nums.fold(100) { acc, n -> acc + n }  // 115
+// empty면 초기값 그대로
+
+// 문자열 결합
+nums.joinToString(", ")                       // "1, 2, 3, 4, 5"
+nums.joinToString(prefix = "[", postfix = "]")  // "[1, 2, 3, 4, 5]"
+nums.joinToString { "($it)" }                 // "(1), (2), (3), (4), (5)"</code></pre>
+
+    <div class="box-project">
+      <div class="box-title">프로젝트 사용 예: joinToString</div>
+      <span class="file-ref">src/main/kotlin/.../worker/CoinWorker.kt</span>
+<pre style="margin-top: 8px;"><code class="language-kotlin">// 청산 시그널 시 조건 이름들을 한 줄로 로깅
+val reasons = signal.triggered.joinToString { it::class.simpleName ?: "?" }
+logger.info("청산 시그널: size={}, reasons=[{}]", position.size, reasons)
+// "청산 시그널: size=1, reasons=[TakeProfitPct, IndicatorExit]"</code></pre>
+    </div>
+
+    <h2 id="group"><span class="section-num">6</span> 그룹핑: groupBy / associateBy / partition</h2>
+
+<pre><code class="language-kotlin">data class Order(val id: Int, val status: String, val amount: Int)
+
+val orders = listOf(
+    Order(1, "PAID", 100), Order(2, "PAID", 200),
+    Order(3, "PENDING", 50), Order(4, "FAILED", 300)
+)
+
+// groupBy: 키별로 List로 묶기
+val byStatus: Map&lt;String, List&lt;Order&gt;&gt; =
+    orders.groupBy { it.status }
+// {"PAID"=[Order(1,...), Order(2,...)], "PENDING"=[...], ...}
+
+// associateBy: 키로 매핑 (1:1 assumed, 중복시 후속이 덮어씀)
+val byId: Map&lt;Int, Order&gt; = orders.associateBy { it.id }
+// {1=Order(1,...), 2=Order(2,...), ...}
+
+// associate: (K, V) 쌍 생성
+val idToAmount: Map&lt;Int, Int&gt; =
+    orders.associate { it.id to it.amount }
+
+// partition: true/false 기준 2개로 분리
+val (paid, others) = orders.partition { it.status == "PAID" }
+// paid: PAID만, others: 나머지
+
+// groupingBy + eachCount: 카운트
+orders.groupingBy { it.status }.eachCount()
+// {"PAID"=2, "PENDING"=1, "FAILED"=1}
+
+// sum per group
+orders.groupBy { it.status }
+      .mapValues { (_, list) -> list.sumOf { it.amount } }
+// {"PAID"=300, "PENDING"=50, "FAILED"=300}</code></pre>
+
+    <h2 id="flat"><span class="section-num">7</span> flatMap / zip / chunked / windowed</h2>
+
+<pre><code class="language-kotlin">// flatMap: 각 원소를 리스트로 만든 후 평탄화
+val lists = listOf(listOf(1, 2), listOf(3, 4), listOf(5))
+lists.flatten()           // [1, 2, 3, 4, 5]
+
+val words = listOf("hello", "world")
+words.flatMap { it.toList() }  // ['h','e','l','l','o','w','o','r','l','d']
+
+// zip: 두 컬렉션 짝짓기
+val names = listOf("A", "B", "C")
+val ages = listOf(1, 2, 3)
+names.zip(ages)  // [("A",1), ("B",2), ("C",3)]
+names.zip(ages) { n, a -> "$n($a)" }  // ["A(1)", "B(2)", "C(3)"]
+
+// chunked: 고정 크기 청크
+(1..10).toList().chunked(3)
+// [[1,2,3], [4,5,6], [7,8,9], [10]]
+
+// windowed: 슬라이딩 윈도우 (지표 계산에 유용!)
+val prices = listOf(100, 102, 101, 105, 108)
+prices.windowed(3)
+// [[100,102,101], [102,101,105], [101,105,108]]
+
+prices.windowed(3, step = 1) { window -> window.average() }
+// [101.0, 102.67, 104.67] — 3일 이동평균!</code></pre>
+
+    <div class="box-project">
+      <div class="box-title">프로젝트 응용: windowed로 SMA 간단 구현 가능</div>
+<pre><code class="language-kotlin">// 현재 구현
+fun calculateSma(prices: List&lt;Double&gt;, period: Int): Double? {
+    if (prices.size &lt; period) return null
+    return prices.takeLast(period).average()
+}
+
+// windowed로 "모든 시점의 SMA" 시리즈 얻기
+fun smaSeries(prices: List&lt;Double&gt;, period: Int): List&lt;Double&gt; =
+    prices.windowed(period) { it.average() }
+
+// 백테스팅/차트 표시에 유용</code></pre>
+    </div>
+
+    <h2 id="sort"><span class="section-num">8</span> 정렬</h2>
+
+<pre><code class="language-kotlin">val nums = listOf(3, 1, 4, 1, 5, 9, 2, 6)
+nums.sorted()                    // [1, 1, 2, 3, 4, 5, 6, 9]
+nums.sortedDescending()
+
+data class User(val name: String, val age: Int)
+val users = listOf(User("Bob", 30), User("Alice", 25), User("Charlie", 28))
+
+users.sortedBy { it.age }        // age 오름차순
+users.sortedByDescending { it.age }
+
+// 복합 기준
+users.sortedWith(
+    compareBy&lt;User&gt; { it.age }.thenBy { it.name }
+)
+
+// 원본 변경 (MutableList)
+val ml = mutableListOf(3, 1, 2)
+ml.sort()  // ml 자체 변경</code></pre>
+
+    <h2 id="sequence"><span class="section-num">9</span> Sequence: lazy 평가</h2>
+    <p>
+      <strong>여러 단계를 체이닝할 때 중간 리스트 생성이 부담</strong>이라면 <code>Sequence</code>로 변환.
+      Python의 <strong>generator / iterator</strong>와 동일 개념.
+    </p>
+
+    <div class="lazy-box">
+      <div class="col eager">
+        <h4>List (eager, 즉시 평가)</h4>
+<pre style="margin: 0;"><code class="language-kotlin">nums
+  .map { it * 2 }     // 전체 새 List 생성
+  .filter { it > 10 } // 또 새 List 생성
+  .take(5)            // 또 새 List</code></pre>
+        <p style="margin: 8px 0 0; font-size: 13px;">
+          단계마다 중간 List 할당 → 큰 컬렉션에서 메모리/GC 부담.
+        </p>
+      </div>
+      <div class="col lazy">
+        <h4>Sequence (lazy, 필요할 때 평가)</h4>
+<pre style="margin: 0;"><code class="language-kotlin">nums.asSequence()
+  .map { it * 2 }
+  .filter { it > 10 }
+  .take(5)
+  .toList()  // 실제 실행</code></pre>
+        <p style="margin: 8px 0 0; font-size: 13px;">
+          중간 List 없음. <code>take(5)</code>가 5개 만들어지면 원본 순회도 중단.
+        </p>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">언제 Sequence?</div>
+      <ul>
+        <li>입력이 <strong>매우 크거나</strong> (수십만+)</li>
+        <li>체이닝 단계가 <strong>많거나</strong> (3단계 이상)</li>
+        <li><strong>조기 종료</strong>가 있거나(take, first, any)</li>
+        <li>무한 시퀀스를 다룰 때 (<code>generateSequence</code>)</li>
+      </ul>
+      <p style="margin-bottom: 0;">작은 리스트 + 단순 변환이면 그냥 List가 더 빠름(JIT가 잘 최적화, 할당 적음).</p>
+    </div>
+
+<pre><code class="language-kotlin">// 무한 시퀀스 + 조기 종료
+generateSequence(1) { it + 1 }    // 1, 2, 3, ...
+    .filter { it % 3 == 0 }
+    .take(5)
+    .toList()  // [3, 6, 9, 12, 15]</code></pre>
+
+    <h2 id="project"><span class="section-num">10</span> gate-futures-bot에서 실제 사용</h2>
+
+    <h3>10.1 map으로 SDK → 도메인 변환</h3>
+    <span class="file-ref">src/main/kotlin/.../client/GateClient.kt</span>
+<pre><code class="language-kotlin">fun getCandlesticks(...): List&lt;Candle&gt; = callApi("...") {
+    val candles: List&lt;FuturesCandlestick&gt; = request.execute()
+    candles.map { toCandle(it) }  // SDK 타입 → 도메인 모델
+}</code></pre>
+
+    <h3>10.2 filter로 중복 캔들 제거</h3>
+    <span class="file-ref">src/main/kotlin/.../worker/CoinWorker.kt</span>
+<pre><code class="language-kotlin">internal fun updateCandles() {
+    val fetched = marketData.getCandles(...)
+    val existingTs = candleCache.mapTo(HashSet()) { it.timestamp }
+    val fresh = fetched.filter { it.timestamp !in existingTs }
+    candleCache.addAll(fresh)
+    // mapTo: 결과를 기존 컬렉션에 주입 (HashSet로 O(1) lookup)
+}</code></pre>
+
+    <h3>10.3 all로 AND 평가 / filter로 OR 수집</h3>
+    <span class="file-ref">src/main/kotlin/.../strategy/TradingStrategy.kt</span>
+<pre><code class="language-kotlin">fun evaluateEntry(candles: List&lt;Candle&gt;): EntrySignal {
+    val prices = candles.map { it.closePrice }
+
+    // all: 모든 조건 충족 시 true (AND)
+    if (longEntries.isNotEmpty() && longEntries.all { it.evaluate(prices) }) {
+        return EntrySignal.Long(longEntries)
+    }
+    // ...
+}
+
+fun evaluateExit(candles: List&lt;Candle&gt;, position: Position): ExitSignal {
+    val prices = candles.map { it.closePrice }
+    // filter: 매칭된 것만 수집 (OR)
+    val triggered = exitConditions.filter { it.evaluate(prices, position) }
+    return if (triggered.isNotEmpty()) ExitSignal.Close(triggered) else ExitSignal.None
+}</code></pre>
+
+    <h3>10.4 takeLast + average로 SMA</h3>
+    <span class="file-ref">src/main/kotlin/.../market/Indicators.kt</span>
+<pre><code class="language-kotlin">fun calculateSma(prices: List&lt;Double&gt;, period: Int): Double? {
+    require(period > 0) { "period must be positive: $period" }
+    if (prices.size &lt; period) return null
+    return prices.takeLast(period).average()
+}
+// takeLast(n): 마지막 n개
+// average(): 평균 (빈 리스트면 NaN — 위에서 guard)</code></pre>
+
+    <h3>10.5 subList로 캔들 캐시 trim</h3>
+    <span class="file-ref">src/main/kotlin/.../worker/CoinWorker.kt</span>
+<pre><code class="language-kotlin">private fun trimCache() {
+    val overflow = candleCache.size - config.maxCacheSize
+    if (overflow > 0) candleCache.subList(0, overflow).clear()
+    // subList: 원본의 "뷰". .clear()하면 원본에서 제거됨
+    // 이런 O(1) slice 조작은 LinkedList가 아닌 ArrayList 기반</code></pre>
+
+    <h2 id="interview"><span class="section-num">11</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. <code>List</code>와 <code>MutableList</code>의 차이는? 내부 구현도 다른가요?</div>
+      <div class="a">
+        A. <strong>인터페이스만 다르고 내부 구현은 같을 수 있습니다</strong>. Kotlin의 <code>listOf(1,2,3)</code>은 <code>List&lt;Int&gt;</code>로 반환되지만 내부는 JVM의 <code>ArrayList</code>. 다만 <code>List</code> 타입에는 <code>add/remove</code> 같은 메서드가 노출되지 않아 호출자가 변경할 수 없습니다. 즉 "읽기 전용 뷰"이며, 다른 참조가 <code>MutableList</code>로 같은 객체를 들고 있으면 변경될 수 있습니다. 진짜 immutable이 필요하면 <code>kotlinx.collections.immutable</code>을 씁니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Sequence를 써야 하는 기준은?</div>
+      <div class="a">
+        A. 체인 단계가 3개 이상, 컬렉션이 크고, 조기 종료(take/first/any)가 있는 경우에 유리합니다.
+        이유는 <strong>중간 List 할당을 피하고</strong>, 필요한 원소만 평가(lazy)하기 때문. 작은 리스트나 단순 1-2단계 변환은 오히려 Sequence의 오버헤드(iterator 프레임)가 커서 List가 빠릅니다.
+        JMH로 측정하지 않고 "Sequence가 무조건 빠르다"는 오해는 피해야 합니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>groupBy</code>와 <code>associateBy</code>의 차이는?</div>
+      <div class="a">
+        A. <strong>key가 중복될 수 있는지</strong>가 차이. <code>groupBy</code>는 키마다 <code>List</code>로 묶어 <code>Map&lt;K, List&lt;V&gt;&gt;</code>를, <code>associateBy</code>는 1:1 매핑 가정으로 <code>Map&lt;K, V&gt;</code>를 반환합니다. 중복 키가 있으면 associateBy는 <strong>나중 값으로 덮어씌움</strong>. 예: 주문들을 status로 묶으면 groupBy, 주문 ID로 lookup용 맵을 만들면 associateBy.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>.toList()</code>는 왜 필요한가요?</div>
+      <div class="a">
+        A. 3가지 이유:
+        ①<strong>Sequence → List 변환</strong>: Sequence 체인의 결과를 구체적 자료구조로 확정.
+        ②<strong>방어 복사</strong>: 호출자에게 넘길 때 가변 리스트를 불변 뷰로 노출(그래도 진짜 불변은 아니지만 add/remove는 막힘).
+        ③<strong>snapshot</strong>: 원본이 변경되는 동안 "그 시점의 복사본"이 필요할 때.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Python의 list comprehension에 해당하는 Kotlin 관용구는?</div>
+      <div class="a">
+        A. <code>map + filter</code> 체인입니다. Python <code>[x*2 for x in nums if x > 0]</code>은 Kotlin <code>nums.filter { it > 0 }.map { it * 2 }</code>. 중첩 comprehension은 <code>flatMap</code>으로: <code>[(a,b) for a in A for b in B]</code> → <code>A.flatMap { a -> B.map { b -> a to b } }</code>. dict comprehension은 <code>associate</code> / <code>associateBy</code>.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li><strong>읽기 전용 타입 기본</strong>: 함수 파라미터/리턴엔 <code>List</code>를 우선</li>
+        <li><strong>메서드 체이닝이 관용구</strong>: map/filter/reduce/groupBy 조합으로 선언적 스타일</li>
+        <li>그룹핑은 <code>groupBy</code>(1:N) / <code>associateBy</code>(1:1) 구분</li>
+        <li><code>windowed</code>/<code>chunked</code>는 시계열/지표에 유용</li>
+        <li>단계가 많거나 조기 종료가 있으면 <code>asSequence()</code>로 lazy 평가</li>
+        <li>Python list comp → map/filter 체인, dict comp → associate</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="04-kotlin-functions.html">&larr; 이전: 함수와 람다</a>
+      <a href="06-kotlin-coroutines.html">다음: 코루틴 &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

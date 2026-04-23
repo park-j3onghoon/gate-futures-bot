@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>02 - Kotlin 기초 문법 | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .code-py, .code-kt { border-radius: 8px; overflow: hidden; }
+    .code-py::before { content: "Python"; display: block; padding: 6px 12px; background: #10b981; color: white; font-size: 12px; font-weight: 700; }
+    .code-kt::before { content: "Kotlin"; display: block; padding: 6px 12px; background: #3b82f6; color: white; font-size: 12px; font-weight: 700; }
+    .side-by-side pre { margin: 0 !important; border-radius: 0 !important; }
+
+    .null-flow {
+      display: flex; align-items: center; gap: 8px; margin: 20px 0;
+      font-size: 13px; flex-wrap: wrap;
+    }
+    .nf-box {
+      padding: 10px 16px; border-radius: 6px; border: 1px solid;
+      font-family: monospace;
+    }
+    .nf-box.type { background: #eff6ff; border-color: #3b82f6; color: #1e40af; }
+    .nf-box.nullable { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+    .nf-arrow { color: #6b7280; font-weight: 700; }
+
+    .op-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .op-cell { padding: 14px; background: #f9fafb; border-left: 3px solid #7c3aed; border-radius: 4px; }
+    .op-cell code { background: transparent; padding: 0; color: #7c3aed; font-weight: 700; }
+    .op-cell .desc { font-size: 13px; color: #6b7280; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>02 - Kotlin 기초 문법</h1>
+      <p class="subtitle">변수, 타입, null safety, 제어 흐름을 Python과 나란히</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#var">변수: val / var</a></li>
+        <li><a href="#types">타입 시스템</a></li>
+        <li><a href="#null-safety">Null Safety (핵심)</a></li>
+        <li><a href="#strings">문자열과 템플릿</a></li>
+        <li><a href="#control-flow">제어 흐름 (if, when, for, while)</a></li>
+        <li><a href="#cast">타입 체크와 스마트 캐스트</a></li>
+        <li><a href="#exceptions">예외 처리</a></li>
+      </ol>
+    </div>
+
+    <h2 id="var"><span class="section-num">1</span> 변수: val / var</h2>
+    <p>Kotlin은 변수를 선언할 때 <strong>immutable(val)인지 mutable(var)인지 명시</strong>합니다. Python엔 없는 개념.</p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># Python: 모든 변수가 재할당 가능
+name = "Teddy"
+name = "Bob"  # OK
+
+# 불변을 의도하려면 관례 또는 Final 힌트
+from typing import Final
+MAX: Final = 100
+# 하지만 런타임엔 재할당 가능 (힌트일 뿐)</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">// Kotlin: val (read-only) vs var (mutable)
+val name: String = "Teddy"
+name = "Bob"  // 컴파일 에러!
+
+var count: Int = 0
+count = 1     // OK
+
+// 타입 추론: 명시 생략 가능
+val greeting = "Hello"  // String으로 자동 추론
+var age = 30            // Int</code></pre>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <div class="box-title">팁: val 기본</div>
+      <p>
+        실무에선 <strong>항상 val을 먼저 쓰고, 재할당이 필요할 때만 var</strong>로 바꿉니다.
+        대부분 변수는 불변으로 유지될 수 있으며, 이게 버그를 크게 줄여줍니다.
+        IntelliJ가 "이 var는 val로 바꿀 수 있어"를 자동 제안합니다.
+      </p>
+    </div>
+
+    <h2 id="types"><span class="section-num">2</span> 타입 시스템</h2>
+    <p>Python은 동적 타입(타입 힌트는 런타임에 강제되지 않음), Kotlin은 <strong>정적 타입</strong>. 컴파일 타임에 모든 타입이 결정됩니다.</p>
+
+    <h3>기본 타입</h3>
+    <table>
+      <thead><tr><th>Python</th><th>Kotlin</th><th>비고</th></tr></thead>
+      <tbody>
+        <tr><td><code>int</code></td><td><code>Int, Long, Short, Byte</code></td><td>비트 크기 구분. 기본 <code>Int</code>(32bit), 금융/시간엔 <code>Long</code></td></tr>
+        <tr><td><code>float</code></td><td><code>Double, Float</code></td><td>기본 <code>Double</code>. Python float = Double</td></tr>
+        <tr><td><code>bool</code></td><td><code>Boolean</code></td><td><code>true</code>/<code>false</code> (소문자)</td></tr>
+        <tr><td><code>str</code></td><td><code>String</code></td><td>UTF-16 내부</td></tr>
+        <tr><td><code>list</code></td><td><code>List&lt;T&gt;</code>(읽기) / <code>MutableList&lt;T&gt;</code></td><td>제네릭 필수</td></tr>
+        <tr><td><code>dict</code></td><td><code>Map&lt;K, V&gt;</code> / <code>MutableMap&lt;K, V&gt;</code></td><td>키/값 타입 명시</td></tr>
+        <tr><td><code>set</code></td><td><code>Set&lt;T&gt;</code> / <code>MutableSet&lt;T&gt;</code></td><td>-</td></tr>
+        <tr><td><code>tuple</code></td><td><code>Pair&lt;A, B&gt;</code> / <code>Triple&lt;A, B, C&gt;</code></td><td>4개 이상은 data class 권장</td></tr>
+        <tr><td><code>None</code></td><td><code>null</code> + 타입 <code>?</code></td><td>아래 Null Safety 참고</td></tr>
+      </tbody>
+    </table>
+
+    <h3>타입 명시와 추론</h3>
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">def add(a: int, b: int) -> int:
+    return a + b
+
+items: list[str] = ["a", "b"]
+config: dict[str, int] = {"port": 8080}</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">fun add(a: Int, b: Int): Int = a + b
+
+val items: List&lt;String&gt; = listOf("a", "b")
+val config: Map&lt;String, Int&gt; = mapOf("port" to 8080)
+
+// 더 간결: 추론 활용
+fun add2(a: Int, b: Int) = a + b
+val items2 = listOf("a", "b")  // List&lt;String&gt; 추론</code></pre>
+      </div>
+    </div>
+
+    <h2 id="null-safety"><span class="section-num">3</span> Null Safety (핵심 중의 핵심)</h2>
+    <p>
+      <strong>Kotlin의 가장 큰 가치</strong>. 타입 자체에 "null일 수 있는지" 표기합니다.
+      Python/Java에서 "NoneType has no attribute" / "NullPointerException"은 가장 흔한 런타임 에러.
+      Kotlin은 이걸 <strong>컴파일 타임에 차단</strong>합니다.
+    </p>
+
+    <div class="null-flow">
+      <div class="nf-box type">String</div>
+      <div>= 절대 null 아님</div>
+      <span class="nf-arrow">|</span>
+      <div class="nf-box nullable">String?</div>
+      <div>= null일 수 있음</div>
+    </div>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python"># Python: 타입 시스템이 강제 안함
+def find_user(id: int) -> User | None:
+    ...
+
+user = find_user(1)
+print(user.name)  # None이면 AttributeError (런타임)
+
+# 방어 코드 필요
+if user is not None:
+    print(user.name)</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">fun findUser(id: Long): User? { /* ... */ }
+
+val user = findUser(1)
+println(user.name)  // 컴파일 에러!
+// User? 타입이므로 null 체크 없이 .name 접근 불가
+
+// 방법 1: safe call (?.) - null이면 null 반환
+println(user?.name)
+
+// 방법 2: elvis (?:) - null 대체값
+println(user?.name ?: "익명")
+
+// 방법 3: 명시적 체크 (smart cast)
+if (user != null) {
+    println(user.name)  // 이 블록 안에선 User로 취급
+}
+
+// 방법 4: !! (단언, 위험) - null이면 NPE
+println(user!!.name)  // null이면 터짐</code></pre>
+      </div>
+    </div>
+
+    <h3>Null safety 연산자 총정리</h3>
+    <div class="op-grid">
+      <div class="op-cell">
+        <code>?.</code>
+        <div class="desc">safe call. null이면 전체 표현식이 null</div>
+      </div>
+      <div class="op-cell">
+        <code>?:</code>
+        <div class="desc">elvis. 왼쪽이 null이면 오른쪽 사용</div>
+      </div>
+      <div class="op-cell">
+        <code>!!</code>
+        <div class="desc">단언. null이면 NPE. 사용 최소화</div>
+      </div>
+      <div class="op-cell">
+        <code>as?</code>
+        <div class="desc">safe cast. 실패시 null</div>
+      </div>
+      <div class="op-cell">
+        <code>let</code>
+        <div class="desc"><code>x?.let { ... }</code> — null이 아닐 때만 블록 실행</div>
+      </div>
+      <div class="op-cell">
+        <code>requireNotNull</code>
+        <div class="desc">null이면 IllegalArgumentException. 계약 위반용</div>
+      </div>
+    </div>
+
+    <div class="box box-warning">
+      <div class="box-title">!!는 최후의 수단</div>
+      <p>
+        <code>!!</code>는 "내가 책임지고 null 아님을 보장한다"는 선언이지만, 실수하면 NPE로 직행합니다.
+        코드 리뷰에서 <code>!!</code>가 보이면 항상 "정말 필요한가?" 질문이 따라옵니다.
+        대개 <code>?:</code> 또는 <code>requireNotNull(...) { "명시적 에러 메시지" }</code>로 대체합니다.
+      </p>
+    </div>
+
+    <h2 id="strings"><span class="section-num">4</span> 문자열과 템플릿</h2>
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">name = "Teddy"
+age = 30
+
+# f-string
+print(f"Hello, {name}! Age: {age}")
+print(f"Next year: {age + 1}")
+
+# multi-line
+text = """여러 줄
+텍스트"""
+
+# 메서드
+"hello".upper()         # "HELLO"
+"  spaces  ".strip()    # "spaces"
+"a,b,c".split(",")      # ["a","b","c"]</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">val name = "Teddy"
+val age = 30
+
+// 문자열 템플릿 ($변수, ${식})
+println("Hello, $name! Age: $age")
+println("Next year: ${age + 1}")
+
+// multi-line (raw string)
+val text = """
+    여러 줄
+    텍스트
+""".trimIndent()
+
+// 메서드 (확장 함수)
+"hello".uppercase()        // "HELLO"
+"  spaces  ".trim()        // "spaces"
+"a,b,c".split(",")         // listOf("a","b","c")</code></pre>
+      </div>
+    </div>
+
+    <h2 id="control-flow"><span class="section-num">5</span> 제어 흐름</h2>
+
+    <h3>if - 표현식</h3>
+    <p>Kotlin에서 <code>if</code>는 <strong>값을 반환하는 표현식</strong>입니다 (Python 삼항 연산자에 가깝지만 더 강력).</p>
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">score = 85
+grade = "A" if score >= 90 else "B" if score >= 80 else "C"
+
+# 문으로 쓰려면:
+if score >= 90:
+    print("A")
+elif score >= 80:
+    print("B")
+else:
+    print("C")</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">val score = 85
+
+// if가 값 반환
+val grade = if (score >= 90) "A"
+            else if (score >= 80) "B"
+            else "C"
+
+// 블록도 가능 (마지막 줄이 값)
+val msg = if (score >= 60) {
+    println("통과 로그")
+    "합격"
+} else {
+    "불합격"
+}</code></pre>
+      </div>
+    </div>
+
+    <h3>when - 강력한 switch</h3>
+    <p>Python <code>match</code>보다 먼저 나왔고 더 유연. <strong>exhaustive 검사</strong>가 핵심.</p>
+
+<pre><code class="language-kotlin">// 값 매칭
+val day = 3
+val name = when (day) {
+    1 -> "월"
+    2, 3 -> "화/수"
+    in 4..5 -> "목/금"
+    else -> "주말"
+}
+
+// 타입 매칭 (is) + 스마트 캐스트
+fun describe(x: Any): String = when (x) {
+    is Int -> "정수 ${x * 2}"      // x가 Int로 취급됨
+    is String -> "문자열 길이 ${x.length}"
+    is List&lt;*&gt; -> "리스트 ${x.size}개"
+    else -> "알 수 없음"
+}
+
+// 조건식 (인자 없는 when)
+val category = when {
+    score >= 90 -> "우수"
+    score >= 70 -> "양호"
+    score < 0 -> throw IllegalArgumentException("음수")
+    else -> "미달"
+}
+
+// sealed class와 exhaustive (else 불필요)
+sealed class Result
+object Success : Result()
+data class Failure(val msg: String) : Result()
+
+fun handle(r: Result) = when (r) {
+    is Success -> "OK"
+    is Failure -> "에러: ${r.msg}"
+    // else 필요 없음: sealed라 모든 케이스 커버됨을 컴파일러가 확인
+}</code></pre>
+
+    <h3>for / while</h3>
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">for i in range(5):
+    print(i)
+
+for i in range(0, 10, 2):
+    print(i)
+
+for name in ["a", "b", "c"]:
+    print(name)
+
+for i, x in enumerate(items):
+    print(i, x)
+
+for k, v in d.items():
+    print(k, v)</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">for (i in 0 until 5) println(i)   // 0..4
+for (i in 0..4) println(i)         // 0..4 (포함)
+for (i in 0..10 step 2) println(i)
+
+for (name in listOf("a", "b", "c")) println(name)
+
+// index와 값 동시
+for ((i, x) in items.withIndex()) {
+    println("$i: $x")
+}
+
+// Map
+for ((k, v) in map) println("$k -> $v")
+
+// while, do-while은 Python과 동일</code></pre>
+      </div>
+    </div>
+
+    <h2 id="cast"><span class="section-num">6</span> 타입 체크와 스마트 캐스트</h2>
+    <p>Kotlin의 별미. <code>is</code>로 체크하면 그 블록 안에서 <strong>자동으로 타입이 좁혀집니다</strong> (Python엔 없는 기능).</p>
+
+<pre><code class="language-kotlin">fun process(value: Any) {
+    if (value is String) {
+        // 여기선 value가 String으로 자동 취급
+        println(value.length)  // .length 접근 가능
+    }
+
+    // null 체크 + 스마트 캐스트
+    val x: String? = getSomething()
+    if (x != null) {
+        println(x.length)  // String으로 좁혀짐, ?. 불필요
+    }
+
+    // 명시적 캐스트 (as) - 실패시 ClassCastException
+    val s = value as String
+
+    // safe cast - 실패시 null
+    val s2 = value as? String  // String?
+}</code></pre>
+
+    <h2 id="exceptions"><span class="section-num">7</span> 예외 처리</h2>
+    <p>Python과 유사하지만 몇 가지 Kotlin 특유 관용구가 있습니다.</p>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">try:
+    x = int(s)
+except ValueError as e:
+    print(f"에러: {e}")
+    x = 0
+finally:
+    cleanup()
+
+# 커스텀 예외
+class MyError(Exception):
+    pass
+
+# checked exception 없음</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">val x = try {
+    s.toInt()
+} catch (e: NumberFormatException) {
+    println("에러: ${e.message}")
+    0
+} finally {
+    cleanup()
+}
+// try도 표현식
+
+// 커스텀 예외
+class MyException(message: String) : RuntimeException(message)
+
+// Kotlin은 checked exception 없음 (Java는 있음)
+// throws 선언 불필요</code></pre>
+      </div>
+    </div>
+
+    <h3>require / check / error</h3>
+    <p>상황별로 쓰는 빌트인 함수들 — Python의 <code>assert</code>보다 의도가 명확합니다.</p>
+
+<pre><code class="language-kotlin">fun divide(a: Int, b: Int): Int {
+    require(b != 0) { "b는 0이 아니어야 함" }      // IllegalArgumentException
+    // 파라미터/인자 검증용
+
+    val result = a / b
+    check(result >= 0) { "결과가 음수" }            // IllegalStateException
+    // 내부 상태 검증용
+
+    if (result > 1_000_000) error("너무 큼")       // IllegalStateException
+    // 도달 불가라 가정한 분기
+
+    return result
+}
+
+// requireNotNull — null이면 IllegalArgumentException
+val x = requireNotNull(maybeNull) { "x는 null이면 안됨" }</code></pre>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li><strong>val / var</strong>: 항상 val 먼저, 필요할 때만 var</li>
+        <li><strong>타입 필수</strong>: 함수 파라미터/리턴엔 타입 명시 (지역 변수는 추론 OK)</li>
+        <li><strong>Null safety</strong>: <code>T</code> vs <code>T?</code> 타입으로 구분. <code>?.</code>, <code>?:</code> 사용. <code>!!</code> 최소화</li>
+        <li><strong>if/when은 표현식</strong>: 값을 반환하는 용도로 자주 씀</li>
+        <li><strong>스마트 캐스트</strong>: <code>is</code> / null 체크 후 자동 타입 좁힘</li>
+        <li><strong>require/check/error</strong>: 의도를 명시한 방어 함수</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="01-overview.html">&larr; 이전: 왜 Kotlin+Spring</a>
+      <a href="03-kotlin-classes.html">다음: 클래스 체계 &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

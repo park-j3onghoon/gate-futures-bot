@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>11 - JPA / Hibernate | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .code-py::before { content: "Django ORM"; display: block; padding: 6px 12px; background: #10b981; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .code-kt::before { content: "Spring Data JPA"; display: block; padding: 6px 12px; background: #3b82f6; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .side-by-side pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
+    .box-anti { border-left: 4px solid #ef4444; background: #fef2f2; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .box-anti .box-title { color: #dc2626; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+
+    .pc-diagram {
+      padding: 24px; background: #f9fafb; border-radius: 12px; margin: 20px 0;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    }
+    .pc-col { padding: 16px; border-radius: 10px; }
+    .pc-col.app { background: #eff6ff; border: 2px solid #3b82f6; }
+    .pc-col.db { background: #fef3c7; border: 2px solid #f59e0b; }
+    .pc-col h4 { margin: 0 0 8px 0; }
+    .entity-item {
+      padding: 6px 10px; background: white; border-radius: 4px; margin: 4px 0;
+      font-size: 12px; font-family: monospace;
+    }
+    .state-diagram {
+      display: flex; gap: 8px; align-items: center; justify-content: center;
+      margin: 20px 0; flex-wrap: wrap;
+    }
+    .state-node {
+      padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      color: white;
+    }
+    .state-transient { background: #9ca3af; }
+    .state-managed { background: #10b981; }
+    .state-detached { background: #f59e0b; }
+    .state-removed { background: #ef4444; }
+    .state-arrow { color: #6b7280; font-size: 14px; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>11 - JPA / Hibernate</h1>
+      <p class="subtitle">Django ORM 개발자를 위한 JPA, 그리고 N+1의 함정</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#concept">JPA vs Hibernate vs Spring Data JPA</a></li>
+        <li><a href="#django-vs">Django ORM과의 근본적 차이</a></li>
+        <li><a href="#entity">@Entity 선언</a></li>
+        <li><a href="#relations">연관관계 매핑</a></li>
+        <li><a href="#persistence-context">영속성 컨텍스트 (핵심)</a></li>
+        <li><a href="#repository">JpaRepository 인터페이스</a></li>
+        <li><a href="#queries">쿼리 작성 방법 4가지</a></li>
+        <li><a href="#n-plus-1">N+1 문제와 해결</a></li>
+        <li><a href="#transaction">@Transactional</a></li>
+        <li><a href="#paging">페이징과 정렬</a></li>
+        <li><a href="#migration">Flyway / Liquibase 스키마 마이그레이션</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="concept"><span class="section-num">1</span> JPA vs Hibernate vs Spring Data JPA</h2>
+    <p>처음 Java 세계에 오면 이 3가지 용어가 섞여 혼란스럽습니다:</p>
+    <ul>
+      <li><strong>JPA (Java Persistence API)</strong>: 자바 <strong>표준 스펙</strong>. 어노테이션 + 인터페이스 명세 (<code>@Entity</code>, <code>EntityManager</code> 등). <strong>구현체는 없음</strong>.</li>
+      <li><strong>Hibernate</strong>: JPA의 <strong>대표 구현체</strong>. 실제로 SQL을 생성하고 DB와 통신. Spring Boot 기본.</li>
+      <li><strong>Spring Data JPA</strong>: Spring이 JPA 위에 얹은 <strong>추상화 레이어</strong>. <code>JpaRepository</code> 인터페이스만 선언하면 구현체 자동 생성.</li>
+    </ul>
+
+    <div class="box box-tip">
+      <div class="box-title">한 줄 요약</div>
+      <p>
+        <strong>JPA 어노테이션으로 Entity를 정의</strong> → <strong>Hibernate가 SQL로 변환</strong> → <strong>Spring Data JPA가 Repository 구현을 자동 생성</strong>.
+        개발자는 인터페이스만 선언하고 Hibernate의 엔진이 이걸 실행.
+      </p>
+    </div>
+
+    <h2 id="django-vs"><span class="section-num">2</span> Django ORM과의 근본적 차이</h2>
+
+    <div class="side-by-side">
+      <div class="code-py">
+<pre><code class="language-python">class User(models.Model):
+    name = models.CharField(max_length=30)
+    email = models.EmailField(unique=True)
+
+# Active Record 스타일
+user = User.objects.get(pk=1)
+user.name = "new"
+user.save()  # ← 명시적 저장
+
+# 쿼리 즉시 실행
+users = list(User.objects.filter(age__gt=18))
+# SQL 실행됨</code></pre>
+      </div>
+      <div class="code-kt">
+<pre><code class="language-kotlin">@Entity
+@Table(name = "users")
+class User(
+    @Id @GeneratedValue val id: Long = 0,
+    var name: String,
+    @Column(unique = true) var email: String
+)
+
+// 영속성 컨텍스트 스타일
+val user = userRepo.findById(1L).orElseThrow()
+user.name = "new"
+// save() 호출 없음! 트랜잭션 커밋 시 자동 반영 (dirty checking)
+
+// 쿼리 지연 실행 (fetch 시점에)
+val users = userRepo.findByAgeGreaterThan(18)</code></pre>
+      </div>
+    </div>
+
+    <h3>핵심 차이 5가지</h3>
+    <table>
+      <thead><tr><th>측면</th><th>Django ORM</th><th>JPA/Hibernate</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>패턴</td>
+          <td>Active Record (모델에 save/delete)</td>
+          <td>Data Mapper (Repository가 담당)</td>
+        </tr>
+        <tr>
+          <td>저장</td>
+          <td><code>user.save()</code> 명시</td>
+          <td>트랜잭션 커밋 시 <strong>자동 감지</strong> (dirty checking)</td>
+        </tr>
+        <tr>
+          <td>1차 캐시</td>
+          <td>없음 (매번 DB 조회)</td>
+          <td><strong>영속성 컨텍스트</strong>가 트랜잭션 내 캐시</td>
+        </tr>
+        <tr>
+          <td>쿼리 시점</td>
+          <td>QuerySet 평가 시</td>
+          <td>fetch type에 따라 (EAGER/LAZY)</td>
+        </tr>
+        <tr>
+          <td>지원 DB</td>
+          <td>PostgreSQL/MySQL/SQLite/Oracle 등</td>
+          <td>동일 + DB별 방언(dialect)으로 최적화</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="entity"><span class="section-num">3</span> @Entity 선언</h2>
+
+<pre><code class="language-kotlin">@Entity
+@Table(name = "users", indexes = [
+    Index(name = "idx_users_email", columnList = "email", unique = true)
+])
+class User(
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)  // AUTO_INCREMENT
+    val id: Long = 0,
+
+    @Column(nullable = false, length = 30)
+    var name: String,
+
+    @Column(nullable = false, unique = true)
+    var email: String,
+
+    @Enumerated(EnumType.STRING)   // ORDINAL 대신 STRING 필수!
+    var status: UserStatus = UserStatus.ACTIVE,
+
+    @Column(name = "created_at", updatable = false)
+    val createdAt: Instant = Instant.now(),
+
+    @Version                         // 낙관적 락
+    var version: Long = 0
+) {
+    // 비즈니스 메서드 — Entity에 포함해도 OK (Rich Domain Model)
+    fun deactivate() {
+        require(status == UserStatus.ACTIVE) { "이미 비활성" }
+        status = UserStatus.INACTIVE
+    }
+}
+
+enum class UserStatus { ACTIVE, INACTIVE, BANNED }</code></pre>
+
+    <div class="box box-anti">
+      <div class="box-title">@Enumerated(ORDINAL) 사용 금지</div>
+      <p>
+        기본값 <code>ORDINAL</code>은 enum을 <strong>순서 기반 정수</strong>로 저장합니다. enum 값 순서를 바꾸거나 중간에 추가하면 DB 데이터가 모두 뒤틀림.
+        <strong>반드시 <code>@Enumerated(EnumType.STRING)</code></strong>으로 문자열 저장하세요.
+      </p>
+    </div>
+
+    <h3>Kotlin Entity 주의사항</h3>
+<pre><code class="language-kotlin">// ⚠️ 기본 Kotlin 클래스는 final → Hibernate가 프록시 생성 못함
+// kotlin("plugin.jpa") 플러그인 추가하면 자동으로 open 처리
+
+// build.gradle.kts
+plugins {
+    kotlin("plugin.jpa") version "2.1.20"
+}
+
+// ⚠️ data class를 Entity로? 권장하지 않음
+// - data class의 equals/hashCode가 모든 필드를 비교 → 영속성 컨텍스트에서 혼란
+// - copy() 메서드가 DB 관점에서 의미 없음
+// 일반 class로, id 기반 equals만 명시적으로 구현</code></pre>
+
+    <h2 id="relations"><span class="section-num">4</span> 연관관계 매핑</h2>
+
+    <h3>1:N (OneToMany)</h3>
+<pre><code class="language-kotlin">@Entity
+class Order(
+    @Id @GeneratedValue val id: Long = 0,
+
+    @ManyToOne(fetch = FetchType.LAZY)     // ⭐ 항상 LAZY
+    @JoinColumn(name = "user_id")
+    val user: User,
+
+    @OneToMany(
+        mappedBy = "order",
+        cascade = [CascadeType.ALL],
+        orphanRemoval = true
+    )
+    val items: MutableList&lt;OrderItem&gt; = mutableListOf()
+) {
+    fun addItem(item: OrderItem) {
+        items.add(item)
+        item.order = this   // 양방향 동기화
+    }
+}
+
+@Entity
+class OrderItem(
+    @Id @GeneratedValue val id: Long = 0,
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id")
+    var order: Order,
+
+    val productId: String,
+    val quantity: Int
+)</code></pre>
+
+    <h3>M:N (ManyToMany) — 대개 중간 Entity로 풀어씀</h3>
+<pre><code class="language-kotlin">// 권장 X: @ManyToMany
+// 중간 테이블을 Entity로 만드는 게 유연성 높음
+
+@Entity
+class Post(
+    @Id @GeneratedValue val id: Long = 0,
+    val title: String,
+
+    @OneToMany(mappedBy = "post", cascade = [CascadeType.ALL])
+    val tags: MutableList&lt;PostTag&gt; = mutableListOf()
+)
+
+@Entity
+@Table(name = "post_tags")
+class PostTag(
+    @EmbeddedId val id: PostTagId,
+
+    @MapsId("postId")
+    @ManyToOne(fetch = FetchType.LAZY)
+    val post: Post,
+
+    @MapsId("tagId")
+    @ManyToOne(fetch = FetchType.LAZY)
+    val tag: Tag,
+
+    @Column(name = "created_at")
+    val createdAt: Instant = Instant.now()  // 관계에 대한 추가 필드
+)
+
+@Embeddable
+data class PostTagId(
+    val postId: Long,
+    val tagId: Long
+) : Serializable</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">Fetch Type: 무조건 LAZY</div>
+      <p>
+        <code>@ManyToOne</code>의 기본값은 <code>EAGER</code>(즉시 로딩) — <strong>NEVER USE</strong>.
+        EAGER는 원하지 않는 타이밍에 JOIN을 일으켜 N+1, 불필요한 메모리 사용을 유발.
+        모든 관계는 <code>LAZY</code>로 명시하고, 필요시 fetch join으로 명시적으로 가져옵니다.
+      </p>
+    </div>
+
+    <h2 id="persistence-context"><span class="section-num">5</span> 영속성 컨텍스트 (⭐ 가장 중요)</h2>
+    <p>
+      <strong>JPA의 심장</strong>. <code>EntityManager</code>가 관리하는 <strong>1차 캐시 + 변경 감지 공간</strong>.
+      트랜잭션 내에서 조회한 Entity는 모두 여기에 등록되고, 트랜잭션 커밋 시 변경 사항이 DB로 자동 반영됩니다.
+    </p>
+
+    <div class="pc-diagram">
+      <div class="pc-col app">
+        <h4>영속성 컨텍스트 (트랜잭션 내)</h4>
+        <p style="font-size: 12px; margin: 0 0 10px;">EntityManager가 관리하는 1차 캐시</p>
+        <div class="entity-item">User(id=1, name="Teddy") ← dirty</div>
+        <div class="entity-item">Order(id=42) ← clean</div>
+        <div class="entity-item">User(id=2, name="Bob") ← new</div>
+        <div class="entity-item">OrderItem(id=7) ← removed</div>
+      </div>
+      <div class="pc-col db">
+        <h4>DB (실제 테이블)</h4>
+        <p style="font-size: 12px; margin: 0 0 10px;">커밋 시 flush되어 반영</p>
+        <div class="entity-item">UPDATE users SET name='Teddy' WHERE id=1</div>
+        <div class="entity-item">INSERT INTO users ...</div>
+        <div class="entity-item">DELETE FROM order_items WHERE id=7</div>
+      </div>
+    </div>
+
+    <h3>Entity 생명주기 상태</h3>
+    <div class="state-diagram">
+      <div class="state-node state-transient">Transient<br>(new)</div>
+      <span class="state-arrow">— persist() →</span>
+      <div class="state-node state-managed">Managed<br>(영속)</div>
+      <span class="state-arrow">— detach() →</span>
+      <div class="state-node state-detached">Detached<br>(준영속)</div>
+      <span class="state-arrow">— merge() →</span>
+      <div class="state-node state-managed">Managed</div>
+    </div>
+    <div style="text-align: center; margin: 10px 0;">
+      <span class="state-arrow">Managed — remove() →</span>
+      <div class="state-node state-removed" style="display: inline-block;">Removed</div>
+    </div>
+
+    <h3>Dirty Checking 예제</h3>
+<pre><code class="language-kotlin">@Service
+@Transactional
+class UserService(private val userRepo: UserRepository) {
+
+    fun updateName(id: Long, newName: String) {
+        val user = userRepo.findById(id).orElseThrow()
+        user.name = newName
+        // save() 호출 없음!
+        // 트랜잭션 커밋 시 Hibernate가 변경 감지 → UPDATE 자동 발행
+    }
+}</code></pre>
+
+    <div class="box box-tip">
+      <div class="box-title">영속성 컨텍스트의 이점</div>
+      <ol>
+        <li><strong>1차 캐시</strong>: 같은 트랜잭션에서 같은 id 조회시 DB 안 감</li>
+        <li><strong>Dirty checking</strong>: 변경된 필드만 UPDATE 자동 발행</li>
+        <li><strong>쓰기 지연</strong>: INSERT/UPDATE를 모아 커밋 시점에 한 번에 flush</li>
+        <li><strong>동일성 보장</strong>: 같은 트랜잭션에서 같은 Entity 참조는 <code>===</code>로 같음</li>
+      </ol>
+    </div>
+
+    <div class="box-anti">
+      <div class="box-title">Detached Entity 다루기의 함정</div>
+<pre><code class="language-kotlin">// 트랜잭션이 끝나면 Entity는 Detached 상태
+@Transactional(readOnly = true)
+fun getUser(id: Long): User = userRepo.findById(id).orElseThrow()
+// ← 리턴되는 순간 Detached. Lazy 관계 접근시 LazyInitializationException!
+
+// 해결:
+// ① 트랜잭션 안에서 필요한 데이터 모두 로드 (fetch join)
+// ② DTO로 변환 후 반환
+// ③ @Transactional 범위 연장 (open-in-view, 권장 X)</code></pre>
+    </div>
+
+    <h2 id="repository"><span class="section-num">6</span> JpaRepository 인터페이스</h2>
+    <p>Spring Data JPA의 마법 — 인터페이스만 선언하면 구현체 자동 생성.</p>
+
+<pre><code class="language-kotlin">interface UserRepository : JpaRepository&lt;User, Long&gt; {
+    // 1. 쿼리 메서드 — 메서드 이름으로 쿼리 자동 생성
+    fun findByEmail(email: String): User?
+    fun findByNameContaining(keyword: String, pageable: Pageable): Page&lt;User&gt;
+    fun countByStatus(status: UserStatus): Long
+    fun existsByEmail(email: String): Boolean
+    fun deleteByCreatedAtBefore(before: Instant): Long
+
+    // 2. @Query JPQL
+    @Query("SELECT u FROM User u WHERE u.email LIKE %:domain")
+    fun findByEmailDomain(@Param("domain") domain: String): List&lt;User&gt;
+
+    // 3. Native SQL
+    @Query(
+        value = "SELECT * FROM users WHERE JSON_EXTRACT(metadata, '$.tier') = :tier",
+        nativeQuery = true
+    )
+    fun findByTier(@Param("tier") tier: String): List&lt;User&gt;
+
+    // 4. Projection (필요한 필드만)
+    interface UserSummary {
+        fun getId(): Long
+        fun getName(): String
+    }
+    fun findAllProjectedBy(pageable: Pageable): Page&lt;UserSummary&gt;
+
+    // 5. 벌크 업데이트/삭제
+    @Modifying
+    @Query("UPDATE User u SET u.status = :status WHERE u.lastLoginAt &lt; :threshold")
+    fun deactivateInactive(
+        @Param("status") status: UserStatus,
+        @Param("threshold") threshold: Instant
+    ): Int
+}
+
+// 기본 제공 메서드 (JpaRepository에서 상속)
+// - save(entity), saveAll(entities)
+// - findById(id): Optional&lt;T&gt;
+// - findAll(), findAllById(ids)
+// - deleteById(id), delete(entity)
+// - count()</code></pre>
+
+    <h3>쿼리 메서드 키워드</h3>
+    <table>
+      <thead><tr><th>키워드</th><th>예시</th><th>JPQL 변환</th></tr></thead>
+      <tbody>
+        <tr><td><code>And / Or</code></td><td><code>findByNameAndAge</code></td><td>WHERE name = ? AND age = ?</td></tr>
+        <tr><td><code>GreaterThan / LessThan</code></td><td><code>findByAgeGreaterThan</code></td><td>WHERE age > ?</td></tr>
+        <tr><td><code>Between</code></td><td><code>findByAgeBetween</code></td><td>WHERE age BETWEEN ? AND ?</td></tr>
+        <tr><td><code>Like / Containing</code></td><td><code>findByNameContaining</code></td><td>WHERE name LIKE %?%</td></tr>
+        <tr><td><code>In</code></td><td><code>findByIdIn</code></td><td>WHERE id IN (?)</td></tr>
+        <tr><td><code>OrderBy</code></td><td><code>findByStatusOrderByCreatedAtDesc</code></td><td>ORDER BY created_at DESC</td></tr>
+        <tr><td><code>IsNull / NotNull</code></td><td><code>findByDeletedAtIsNull</code></td><td>WHERE deleted_at IS NULL</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="queries"><span class="section-num">7</span> 쿼리 작성 방법 4가지</h2>
+
+    <h3>7.1 메서드 이름 (위에서 설명)</h3>
+    <p>간단한 조회에 최적. 메서드 이름이 너무 길어지면 다른 방식.</p>
+
+    <h3>7.2 JPQL (@Query)</h3>
+    <p>JPA의 표준 쿼리 언어. 테이블이 아닌 <strong>Entity 기준</strong>으로 작성.</p>
+<pre><code class="language-kotlin">@Query("""
+    SELECT o FROM Order o
+    JOIN FETCH o.user
+    WHERE o.status = :status
+    AND o.createdAt &gt;= :since
+""")
+fun findRecentByStatus(
+    @Param("status") status: OrderStatus,
+    @Param("since") since: Instant
+): List&lt;Order&gt;</code></pre>
+
+    <h3>7.3 Native SQL</h3>
+    <p>JPQL로 표현 어려운 DB 특화 기능 (Window 함수, JSON 연산 등).</p>
+<pre><code class="language-kotlin">@Query(
+    value = """
+        SELECT * FROM orders
+        WHERE status = :status
+        AND created_at &gt;= NOW() - INTERVAL '7 days'
+    """,
+    nativeQuery = true
+)
+fun findRecent(@Param("status") status: String): List&lt;Order&gt;</code></pre>
+
+    <h3>7.4 QueryDSL (타입 안전 동적 쿼리)</h3>
+    <p>복잡한 동적 쿼리(검색 필터 등)에 유용. 별도 의존성 필요.</p>
+<pre><code class="language-kotlin">@Repository
+class OrderQueryRepository(
+    private val queryFactory: JPAQueryFactory
+) {
+    fun search(filter: OrderFilter): List&lt;Order&gt; {
+        val q = QOrder.order
+        return queryFactory
+            .selectFrom(q)
+            .where(
+                filter.status?.let { q.status.eq(it) },
+                filter.minAmount?.let { q.amount.goe(it) },
+                filter.userId?.let { q.user.id.eq(it) }
+            )
+            .orderBy(q.createdAt.desc())
+            .fetch()
+    }
+}</code></pre>
+
+    <h2 id="n-plus-1"><span class="section-num">8</span> N+1 문제와 해결 (⭐ 단골 면접 주제)</h2>
+
+    <div class="box-anti">
+      <div class="box-title">N+1 문제란</div>
+<pre><code class="language-kotlin">val orders = orderRepo.findAll()  // 1번 쿼리: SELECT * FROM orders
+orders.forEach { order ->
+    println(order.user.name)      // N번 쿼리: SELECT * FROM users WHERE id = ?
+    // 주문이 1000개면 1 + 1000 = 1001번 쿼리
+}</code></pre>
+      <p style="margin: 8px 0; font-size: 13px;">
+        Lazy 관계를 반복문에서 접근하면 발생. 성능 저하의 가장 흔한 원인.
+      </p>
+    </div>
+
+    <h3>해결 1: fetch join (JPQL)</h3>
+<pre><code class="language-kotlin">@Query("SELECT o FROM Order o JOIN FETCH o.user")
+fun findAllWithUser(): List&lt;Order&gt;
+// 1번 쿼리: SELECT * FROM orders o JOIN users u ON o.user_id = u.id</code></pre>
+
+    <h3>해결 2: @EntityGraph</h3>
+<pre><code class="language-kotlin">interface OrderRepository : JpaRepository&lt;Order, Long&gt; {
+    @EntityGraph(attributePaths = ["user", "items"])
+    override fun findAll(): List&lt;Order&gt;
+
+    @EntityGraph(attributePaths = ["user"])
+    fun findByStatus(status: OrderStatus): List&lt;Order&gt;
+}</code></pre>
+
+    <h3>해결 3: Batch size</h3>
+<pre><code class="language-yaml"># application.yml
+spring:
+  jpa:
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100   # 전역 설정
+        # Lazy 관계 접근시 최대 100개씩 묶어 IN 쿼리 발행
+        # N+1을 N/100 + 1로 감소</code></pre>
+
+<pre><code class="language-kotlin">// 엔티티별 개별 지정
+@Entity
+class Order(
+    @OneToMany(mappedBy = "order")
+    @BatchSize(size = 50)
+    val items: MutableList&lt;OrderItem&gt; = mutableListOf()
+)</code></pre>
+
+    <h3>해결 4: Projection으로 한 번에 필요한 것만</h3>
+<pre><code class="language-kotlin">data class OrderSummary(
+    val orderId: Long,
+    val userName: String,
+    val itemCount: Int,
+    val total: BigDecimal
+)
+
+@Query("""
+    SELECT new com.example.OrderSummary(
+        o.id, o.user.name, size(o.items), sum(oi.price * oi.quantity)
+    )
+    FROM Order o JOIN o.items oi
+    WHERE o.status = :status
+    GROUP BY o.id
+""")
+fun findSummaries(@Param("status") status: OrderStatus): List&lt;OrderSummary&gt;</code></pre>
+
+    <h2 id="transaction"><span class="section-num">9</span> @Transactional</h2>
+
+<pre><code class="language-kotlin">@Service
+@Transactional  // 클래스 전체에 적용
+class OrderService(
+    private val orderRepo: OrderRepository,
+    private val stockService: StockService
+) {
+    // 기본: REQUIRED — 기존 트랜잭션 있으면 참여, 없으면 새로 시작
+    fun placeOrder(cmd: OrderCommand): Order {
+        stockService.reserve(cmd.productId, cmd.quantity)  // 같은 트랜잭션
+        val order = Order.create(cmd)
+        return orderRepo.save(order)
+    }
+
+    // 읽기 전용 최적화: flush 안 함, 변경 감지 안 함
+    @Transactional(readOnly = true)
+    fun getOrder(id: Long): Order = orderRepo.findById(id).orElseThrow()
+
+    // 새 트랜잭션 강제 (상위 트랜잭션과 분리)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    fun auditLog(msg: String) {
+        // 상위 트랜잭션이 롤백되어도 이 로그는 남음
+    }
+
+    // 타임아웃 + 격리 수준
+    @Transactional(
+        timeout = 10,
+        isolation = Isolation.READ_COMMITTED
+    )
+    fun complexOperation() { }
+}</code></pre>
+
+    <h3>롤백 규칙</h3>
+    <ul>
+      <li>기본: <strong>RuntimeException에만 롤백</strong>. Checked exception은 커밋됨 (Java 유래)</li>
+      <li>명시: <code>@Transactional(rollbackFor = [MyCheckedException::class])</code></li>
+      <li>예외 안 던지고 롤백: <code>TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()</code></li>
+    </ul>
+
+    <div class="box-anti">
+      <div class="box-title">@Transactional의 함정: 프록시 기반</div>
+<pre><code class="language-kotlin">@Service
+class OrderService {
+    fun outer() {
+        this.inner()  // ❌ 프록시 bypass! inner의 @Transactional 무시
+    }
+
+    @Transactional
+    fun inner() { /* ... */ }
+}
+
+// 해결: self-injection 또는 클래스 분리
+@Service
+class OrderService(
+    @Lazy private val self: OrderService  // 자기 참조를 프록시로
+) {
+    fun outer() {
+        self.inner()  // ✅ 프록시 통해 호출
+    }
+    @Transactional
+    fun inner() { }
+}</code></pre>
+    </div>
+
+    <h2 id="paging"><span class="section-num">10</span> 페이징과 정렬</h2>
+
+<pre><code class="language-kotlin">interface UserRepository : JpaRepository&lt;User, Long&gt; {
+    fun findByStatus(status: UserStatus, pageable: Pageable): Page&lt;User&gt;
+    fun findByStatus(status: UserStatus, pageable: Pageable): Slice&lt;User&gt;  // count 쿼리 X
+}
+
+// 사용
+val pageable = PageRequest.of(
+    0,                        // 페이지 번호 (0부터)
+    20,                       // 크기
+    Sort.by("createdAt").descending()
+)
+val page: Page&lt;User&gt; = userRepo.findByStatus(UserStatus.ACTIVE, pageable)
+
+page.content          // 현재 페이지 데이터
+page.totalElements    // 전체 개수 (count 쿼리 추가 실행)
+page.totalPages
+page.hasNext()
+page.number           // 현재 페이지
+
+// Controller에서 PageRequest 자동 바인딩
+@GetMapping("/users")
+fun list(
+    @PageableDefault(size = 20, sort = ["createdAt"], direction = Sort.Direction.DESC)
+    pageable: Pageable
+): Page&lt;UserResponse&gt; = userRepo.findAll(pageable).map(UserResponse::from)
+
+// GET /users?page=0&size=20&sort=createdAt,desc</code></pre>
+
+    <h3>Offset vs Cursor 기반</h3>
+    <ul>
+      <li><strong>Offset 기반</strong>(<code>OFFSET N LIMIT M</code>): 전체 count 가능하지만, offset이 클수록 느림</li>
+      <li><strong>Cursor 기반</strong>(<code>WHERE id &lt; last_id LIMIT N</code>): 빠르지만 전체 count 불가, 특정 페이지로 점프 불가</li>
+    </ul>
+    <p>대량 데이터 + 무한 스크롤이면 Cursor 기반 권장.</p>
+
+    <h2 id="migration"><span class="section-num">11</span> Flyway / Liquibase</h2>
+    <p>
+      Django의 <code>makemigrations</code>/<code>migrate</code>에 대응. JPA의 <code>ddl-auto: update</code>는 개발용이며 <strong>프로덕션에선 절대 사용 금지</strong>.
+      대신 Flyway/Liquibase로 명시적 스키마 관리.
+    </p>
+
+<pre><code class="language-yaml"># application.yml
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate   # Entity ↔ 스키마 일치 여부만 검증
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration</code></pre>
+
+<pre><code>src/main/resources/db/migration/
+├── V1__init_users.sql
+├── V2__add_orders.sql
+├── V3__add_email_index.sql
+└── V4__add_status_column.sql</code></pre>
+
+<pre><code class="language-sql">-- V2__add_orders.sql
+CREATE TABLE orders (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id),
+    amount DECIMAL(10, 2) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_orders_user_id ON orders(user_id);
+CREATE INDEX idx_orders_created_at ON orders(created_at DESC);</code></pre>
+
+    <h2 id="interview"><span class="section-num">12</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. JPA와 Hibernate, Spring Data JPA의 관계는?</div>
+      <div class="a">
+        A. <strong>JPA</strong>는 자바 영속성 표준 <strong>스펙</strong>(어노테이션과 인터페이스 명세). <strong>Hibernate</strong>는 JPA의 대표 <strong>구현체</strong>로 실제 SQL을 생성하고 DB와 통신. <strong>Spring Data JPA</strong>는 JPA 위에 얹은 Spring의 <strong>추상화 레이어</strong>로, <code>JpaRepository</code> 인터페이스만 선언하면 구현체를 자동 생성합니다. 개발자는 JPA 어노테이션으로 Entity를 매핑하고, Spring Data JPA 인터페이스로 쿼리를 선언하며, 실제 실행은 Hibernate가 담당합니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. N+1 문제를 설명하고 해결 방법을 알려주세요.</div>
+      <div class="a">
+        A. Lazy 연관관계를 반복문에서 접근할 때 <strong>1번의 메인 쿼리 + N번의 추가 쿼리</strong>가 발생하는 문제. 예: <code>orders.forEach { it.user.name }</code>에서 각 order마다 user를 가져오는 쿼리가 발생.
+        해결책:
+        ①<strong>fetch join</strong>(JPQL의 <code>JOIN FETCH</code>)로 한 번의 JOIN 쿼리로 해결.
+        ②<strong>@EntityGraph</strong>로 선언적으로 eager 로딩 범위 지정.
+        ③<strong>default_batch_fetch_size</strong>(예: 100)로 N을 N/100으로 감소 (IN 절).
+        ④ DTO <strong>Projection</strong>으로 애초에 필요한 필드만 조회.
+        어떤 방법이든 "의도하지 않은 Lazy 접근을 제거"하는 것이 핵심.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. 영속성 컨텍스트는 무엇이고 왜 필요한가요?</div>
+      <div class="a">
+        A. <strong>EntityManager가 관리하는 Entity 저장소</strong>(트랜잭션 범위의 1차 캐시). 4가지 이점:
+        ①<strong>1차 캐시</strong>: 같은 트랜잭션 내 동일 id 조회는 DB 재접근 없음.
+        ②<strong>Dirty checking</strong>: 변경된 Entity를 감지해 커밋 시 UPDATE 자동 발행. <code>save()</code> 불필요.
+        ③<strong>쓰기 지연</strong>: INSERT/UPDATE를 커밋 시점에 모아 한 번에 flush → DB 왕복 감소.
+        ④<strong>동일성 보장</strong>: 같은 id는 <code>===</code>로 동일 인스턴스.
+        단점은 트랜잭션 밖에서 Lazy 관계 접근시 <code>LazyInitializationException</code>이 발생하니 경계가 명확해야 합니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. JPA Entity는 data class로 만들어도 되나요?</div>
+      <div class="a">
+        A. <strong>권장하지 않습니다</strong>. 이유:
+        ① data class의 <code>equals/hashCode</code>는 <strong>모든 필드</strong>를 비교하는데, 영속성 컨텍스트에서 id만 일치하면 같은 Entity여야 합니다. 프록시 객체와 실제 객체의 equals가 깨질 수 있음.
+        ② <code>copy()</code>가 DB 관점에서 의미가 없고 오히려 혼란.
+        ③ Entity는 상태가 변화(dirty checking)하므로 "불변 값 객체" 개념과 맞지 않음.
+        일반 class로 선언하고 <code>@Id</code> 기반 equals를 명시적으로 구현합니다. DTO는 data class가 적합.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>@Transactional</code>이 동작하지 않는 경우가 있나요?</div>
+      <div class="a">
+        A. 여러 경우:
+        ①<strong>같은 클래스 내부 호출</strong> — Spring AOP가 프록시 기반이라 <code>this.inner()</code>는 프록시를 거치지 않아 트랜잭션 적용 X.
+        ②<strong>private 메서드</strong>에 붙임 — 프록시가 override 불가라 무시됨.
+        ③<strong>checked exception</strong> 던짐 — 기본 롤백 규칙은 RuntimeException에만 적용. <code>rollbackFor</code> 명시 필요.
+        ④<strong>예외 잡고 삼킴</strong> — 예외가 외부로 나가지 않으면 롤백 신호도 없음.
+        ⑤<strong>@Async 메서드에서 호출</strong> — 다른 스레드라 트랜잭션 컨텍스트가 없음.
+        해결: self-injection, public 메서드 사용, 명시적 rollbackFor, AspectJ 모드 등.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>ddl-auto</code>를 어떻게 설정하시나요?</div>
+      <div class="a">
+        A. <strong>프로덕션은 <code>validate</code></strong>(Entity ↔ 스키마 일치만 검증). 스키마 변경은 Flyway/Liquibase로 명시적 마이그레이션. 이유:
+        ①<code>update</code>는 컬럼 타입 변경/삭제를 하지 않아 점진적 왜곡.
+        ②<code>create-drop</code>은 재시작시 전체 날려 데이터 손실.
+        ③스키마 변경 이력이 남지 않아 롤백/감사 불가.
+        개발은 <code>update</code>도 가능하지만 테스트는 Flyway를 타게 해서 프로덕션과 동일한 마이그레이션 경로 검증이 좋음.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li>JPA(스펙) + Hibernate(구현) + Spring Data JPA(Repository 자동 생성)</li>
+        <li>Entity는 일반 class로, <strong>@Enumerated(STRING)</strong>, <strong>fetch LAZY 기본</strong></li>
+        <li><strong>영속성 컨텍스트</strong>의 dirty checking으로 save() 불필요, 단 트랜잭션 경계 주의</li>
+        <li><strong>N+1</strong> = fetch join / @EntityGraph / batch size / DTO projection</li>
+        <li><code>@Transactional</code>: 내부 호출/private/checked exception 함정</li>
+        <li>스키마는 <strong>Flyway/Liquibase</strong>, <code>ddl-auto: validate</code></li>
+        <li>페이징은 <code>Pageable</code>, 대량 데이터엔 cursor 기반 고려</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="10-spring-web-rest.html">&larr; 이전: REST API</a>
+      <a href="12-nosql-caching.html">다음: NoSQL 캐싱 &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-sql.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+</body>
+</html>

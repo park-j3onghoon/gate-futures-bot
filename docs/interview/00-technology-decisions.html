@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>00 - 기술 선택 근거 | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .decision {
+      margin: 28px 0; border: 2px solid #7c3aed; border-radius: 12px; overflow: hidden;
+    }
+    .decision-header {
+      padding: 14px 20px; background: #7c3aed; color: white;
+      font-weight: 700; font-size: 15px;
+    }
+    .decision-header .chosen { background: white; color: #7c3aed; padding: 2px 10px; border-radius: 100px; font-size: 12px; margin-left: 8px; }
+    .decision-body { padding: 20px; }
+    .candidates { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    .candidates th {
+      padding: 10px; background: #f3f4f6; text-align: left; font-size: 13px;
+      border-bottom: 2px solid #d1d5db;
+    }
+    .candidates td {
+      padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; vertical-align: top;
+    }
+    .candidates .option-name {
+      font-weight: 700; color: #1f2937;
+    }
+    .candidates .chosen-row { background: #faf5ff; }
+    .candidates .chosen-row .option-name::after {
+      content: "✓ 선택"; color: #7c3aed; font-size: 11px;
+      background: white; border: 1px solid #7c3aed; padding: 1px 8px;
+      border-radius: 100px; margin-left: 8px; font-weight: 700;
+    }
+    .pros { color: #059669; }
+    .cons { color: #dc2626; }
+    .reason-box {
+      margin-top: 12px; padding: 14px; background: #fef7e0;
+      border-left: 4px solid #f59e0b; border-radius: 0 8px 8px 0;
+    }
+    .reason-box .title {
+      font-weight: 700; color: #92400e; margin-bottom: 6px; font-size: 14px;
+    }
+    .scenario {
+      padding: 10px 14px; background: #eff6ff; border-left: 4px solid #3b82f6;
+      border-radius: 0 8px 8px 0; margin-top: 8px; font-size: 13px;
+    }
+    .scenario b { color: #2563eb; }
+    .nav-top { display: flex; gap: 12px; flex-wrap: wrap; margin: 20px 0; }
+    .nav-top a {
+      padding: 6px 14px; background: #f3f4f6; border-radius: 100px;
+      color: #374151; text-decoration: none; font-size: 13px; font-weight: 600;
+    }
+    .nav-top a:hover { background: #7c3aed; color: white; }
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>00 - 기술 선택 근거</h1>
+      <p class="subtitle">"왜 이것을 선택했나요?"에 대한 모든 답 — 후보 · 장단점 · 상황 · 결론</p>
+    </header>
+
+    <div class="box box-tip">
+      <div class="box-title">이 페이지의 용도</div>
+      <p>
+        기술 선택 질문은 면접의 단골입니다. "왜 A가 아니라 B?" 같은 질문은 <strong>후보들의 장단점을 이해하고 상황에 맞춰 선택할 수 있는지</strong>를 봅니다.
+        각 기술에 대해 <strong>후보 → 각각의 Pros/Cons → 우리의 상황/제약 → 선택과 근거</strong>를 구조화했습니다. 모든 기술에 "은총알"은 없습니다.
+      </p>
+    </div>
+
+    <h2>Jump to</h2>
+    <div class="nav-top">
+      <a href="#language">① 언어</a>
+      <a href="#framework">② 웹 프레임워크</a>
+      <a href="#build">③ 빌드 도구</a>
+      <a href="#concurrency">④ 동시성 모델</a>
+      <a href="#orm">⑤ ORM/DB 접근</a>
+      <a href="#cache">⑥ 캐싱</a>
+      <a href="#mq">⑦ 메시지 브로커</a>
+      <a href="#http">⑧ HTTP 클라이언트</a>
+      <a href="#serialization">⑨ 직렬화</a>
+      <a href="#test">⑩ 테스트 도구</a>
+      <a href="#deploy">⑪ 배포/오케스트레이션</a>
+      <a href="#observability">⑫ 관측성</a>
+      <a href="#ci">⑬ CI/CD</a>
+      <a href="#project">⑭ 이 프로젝트의 선택들</a>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="language">① 언어: Kotlin vs Java vs 대안</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        백엔드 언어 선택
+        <span class="chosen">Kotlin</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead>
+            <tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr>
+          </thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Kotlin</td>
+              <td class="pros">간결, null safety, JVM 생태계 100% 활용, 코루틴, data/sealed class</td>
+              <td class="cons">Java 대비 컴파일 다소 느림, 일부 라이브러리는 Java-first</td>
+            </tr>
+            <tr>
+              <td class="option-name">Java</td>
+              <td class="pros">가장 큰 생태계, 시니어 인력 풀 최대, 도구 지원 최고</td>
+              <td class="cons">verbose, null 처리 수동(Optional), 레코드 나오기 전 value class 불편</td>
+            </tr>
+            <tr>
+              <td class="option-name">Scala</td>
+              <td class="pros">강력한 타입 시스템, 함수형 패러다임, Spark</td>
+              <td class="cons">학습 곡선 극단적, 컴파일 느림, 인력 수급 어려움</td>
+            </tr>
+            <tr>
+              <td class="option-name">Go</td>
+              <td class="pros">빠른 기동, 작은 바이너리, goroutine 단순</td>
+              <td class="cons">제네릭 뒤늦음, 에러 처리 verbose, 성숙한 DI/ORM 부재</td>
+            </tr>
+            <tr>
+              <td class="option-name">Python (FastAPI)</td>
+              <td class="pros">빠른 개발, ML 통합, 기존 Python 인력</td>
+              <td class="cons">GIL로 진정한 병렬 어려움, 런타임 에러 많음, 대규모 리팩터링 위험</td>
+            </tr>
+            <tr>
+              <td class="option-name">Node.js (TypeScript)</td>
+              <td class="pros">프론트와 동일 언어, 빠른 IO, npm 생태계</td>
+              <td class="cons">단일 스레드 CPU 바운드 약함, 메모리 누수 디버깅 어려움</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="scenario">
+          <b>우리의 상황</b>: 티니어는 글로벌 6천만 MAU 백엔드. 안정성 + 대규모 트래픽 + 장기 유지보수 + 한국 시니어 인력 풀. 광고 미디에이션 등 정확성 중요 서비스.
+        </div>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: Kotlin</div>
+          <p style="margin: 0;">
+            ①<strong>JVM의 안정성</strong>: 10년+ 검증된 GC, 프로파일러, APM 도구 풀 활용.
+            ②<strong>Java 생태계 그대로</strong>: Spring, Hibernate, Kafka client 등 모든 라이브러리 사용 가능.
+            ③<strong>null safety</strong>: 글로벌 서비스에서 NPE 줄이기는 직접적 비용 절감.
+            ④<strong>Python 경력과의 갭 최소</strong>: 간결한 문법, 함수형, data class 등 Python 개발자 친화적.
+            ⑤<strong>한국 채용 시장</strong>: 토스, 카카오, 쿠팡, 배민, 당근 등이 Kotlin 중심 → 인력 수급 유리.
+            Java만 쓰던 10년 전이라면 Java지만, <strong>2025년 기준 신규 JVM 백엔드는 Kotlin이 거의 기본</strong>.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="framework">② 웹 프레임워크: Spring Boot vs 대안</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        JVM 백엔드 프레임워크
+        <span class="chosen">Spring Boot</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Spring Boot</td>
+              <td class="pros">생태계 지배적, Auto-configuration, Starter, 한국 시장 표준, 방대한 자료</td>
+              <td class="cons">기동 시간 10초+, 메모리 무거움, 리플렉션 오버헤드</td>
+            </tr>
+            <tr>
+              <td class="option-name">Quarkus</td>
+              <td class="pros">GraalVM native image 지원, 기동 0.1초, 낮은 메모리, Kubernetes-native</td>
+              <td class="cons">생태계 작음, 리플렉션 제약, 국내 레퍼런스 부족</td>
+            </tr>
+            <tr>
+              <td class="option-name">Micronaut</td>
+              <td class="pros">컴파일타임 DI (리플렉션 X), 빠른 기동, Kotlin friendly</td>
+              <td class="cons">생태계 작음, 튜토리얼 부족, Spring 이식 비용</td>
+            </tr>
+            <tr>
+              <td class="option-name">Ktor</td>
+              <td class="pros">Kotlin-first, 코루틴 네이티브, 경량, JetBrains 공식</td>
+              <td class="cons">DI 자체 없음(Koin 별도), ORM 없음, 엔터프라이즈 기능 부족</td>
+            </tr>
+            <tr>
+              <td class="option-name">Spring WebFlux</td>
+              <td class="pros">리액티브, 높은 동시성, 백프레셔</td>
+              <td class="cons">러닝커브 높음, 디버깅 어려움, 블로킹 라이브러리와 궁합 나쁨</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="scenario">
+          <b>우리의 상황</b>: 팀 규모 중간, 빠른 기능 개발 필요, 기동 시간은 초당 trade-off 가능, 국내 채용 중심. Lambda로 돌리는 게 아니라 상시 구동되는 ECS/EKS 서비스.
+        </div>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: Spring Boot</div>
+          <p style="margin: 0;">
+            ①<strong>생태계가 압도적</strong>: Spring Data JPA, Spring Security, Spring Cloud 등 "해결된 문제"가 많음.
+            ②<strong>채용/온보딩</strong>: 국내 Kotlin/Spring 개발자 풀이 가장 크고 학습 리소스 풍부.
+            ③<strong>성숙도</strong>: 15년 이상 검증된 프레임워크. 장애 사례/해결책이 문서화됨.
+            ④<strong>기동 시간</strong>이 문제가 되는 경우(Lambda 등)에만 Quarkus/Micronaut 고려.
+            대부분 백엔드 서비스는 <strong>상시 구동</strong>되므로 기동 10초는 한 번 비용.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-header">
+        MVC vs WebFlux
+        <span class="chosen">Spring MVC + 코루틴</span>
+      </div>
+      <div class="decision-body">
+        <p>Spring Boot 내부에서도 선택이 있습니다.</p>
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Spring MVC + 코루틴</td>
+              <td class="pros">서블릿 모델(이해 쉬움), 대부분 라이브러리와 호환, Kotlin suspend 지원(Spring 6+)</td>
+              <td class="cons">스레드-per-요청 모델의 한계(수만 동시 접속시)</td>
+            </tr>
+            <tr>
+              <td class="option-name">Spring WebFlux (Reactor)</td>
+              <td class="pros">리액티브, 수만 동시 접속 감당, 백프레셔 자동</td>
+              <td class="cons">Mono/Flux 러닝커브, 블로킹 코드 섞이면 쉽게 깨짐, 스택트레이스 읽기 어려움</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거</div>
+          <p style="margin: 0;">
+            <strong>수만 동시 접속 + 대부분 IO 대기</strong>(채팅, 게이트웨이, 스트리밍) 시나리오에만 WebFlux.
+            일반 REST API는 <strong>Spring MVC + 코루틴</strong>이 현실적:
+            <br>① 팀원 전체가 리액티브 사고를 이해할 필요 없음.
+            <br>② Kotlin suspend를 Controller에서 직접 지원(Spring 6+).
+            <br>③ 기존 JPA, JDBC 등 블로킹 라이브러리 그대로 사용.
+            <br>④ 디버깅/스택트레이스 명확.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="build">③ 빌드 도구: Gradle vs Maven</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        JVM 빌드 도구
+        <span class="chosen">Gradle (Kotlin DSL)</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Gradle (Kotlin DSL)</td>
+              <td class="pros">빠른 incremental build, build cache, Kotlin 타입 안전, 유연한 커스텀 로직</td>
+              <td class="cons">학습 곡선 있음, build script도 "프로그램"이라 복잡해질 수 있음</td>
+            </tr>
+            <tr>
+              <td class="option-name">Gradle (Groovy DSL)</td>
+              <td class="pros">기존 프로젝트 호환, 커뮤니티 예제 많음</td>
+              <td class="cons">IDE 지원 약함(동적 타입), Kotlin 프로젝트에서 부자연스러움</td>
+            </tr>
+            <tr>
+              <td class="option-name">Maven</td>
+              <td class="pros">XML로 선언적, IDE 지원 최고, 학습 쉬움, Dependabot 등 도구 지원</td>
+              <td class="cons">XML verbose, 커스텀 로직 어려움, 빌드 속도 Gradle보다 느림</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="scenario">
+          <b>우리의 상황</b>: Kotlin 프로젝트, 중간 규모, 빌드 속도 중요, 커스텀 태스크 가끔 필요.
+        </div>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: Gradle Kotlin DSL</div>
+          <p style="margin: 0;">
+            ①<strong>Kotlin DSL</strong>: 빌드 스크립트도 Kotlin이라 IDE 자동완성/리팩터링 지원.
+            ②<strong>incremental + build cache</strong>: 변경된 모듈만 재빌드, 팀 단위 remote cache로 CI 가속.
+            ③<strong>Kotlin 프로젝트와 일관성</strong>: 소스와 빌드가 같은 언어.
+            ④ Maven은 <strong>레거시 유지보수</strong>에만. 신규 Kotlin 프로젝트엔 Gradle Kotlin DSL이 표준.
+            ⑤ Gradle 설정 복잡도가 문제되면 <strong>Version Catalog (libs.versions.toml)</strong>로 중앙 관리.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="concurrency">④ 동시성 모델: 코루틴 vs 대안</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        JVM 동시성 처리
+        <span class="chosen">Kotlin Coroutines</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Kotlin Coroutines</td>
+              <td class="pros">경량(수KB/코루틴), 구조화 동시성, suspend 함수로 순차 코드 모양, Flow</td>
+              <td class="cons">코루틴과 블로킹 API 섞으면 주의 필요, 약간의 런타임 비용</td>
+            </tr>
+            <tr>
+              <td class="option-name">Thread + Executor</td>
+              <td class="pros">가장 단순한 모델, 모든 Java 라이브러리와 호환</td>
+              <td class="cons">스레드당 ~1MB, 수천 개 안됨, Future/CompletableFuture 중첩 지옥</td>
+            </tr>
+            <tr>
+              <td class="option-name">Project Reactor (WebFlux)</td>
+              <td class="pros">리액티브 스트림, 백프레셔, 고동시성</td>
+              <td class="cons">Mono/Flux 체인 익히기 어려움, 블로킹 API 섞기 어려움</td>
+            </tr>
+            <tr>
+              <td class="option-name">Virtual Threads (Java 21+, Project Loom)</td>
+              <td class="pros">기존 스레드 코드 그대로, JVM 네이티브 경량 스레드</td>
+              <td class="cons">아직 초기 단계, synchronized + pinning 이슈, 라이브러리 대응 중</td>
+            </tr>
+            <tr>
+              <td class="option-name">RxJava</td>
+              <td class="pros">Java 리액티브 사실상 표준 (구세대)</td>
+              <td class="cons">Reactor가 Spring 표준화 이후 밀림</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="scenario">
+          <b>우리의 상황</b>: Kotlin 기반, IO 바운드(HTTP/DB 호출 많음), 팀이 리액티브 사고 경험 없음, 여러 작업 병렬 처리 필요(광고 미디에이션은 여러 네트워크 병렬 호출).
+        </div>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: Coroutines</div>
+          <p style="margin: 0;">
+            ①<strong>구조화된 동시성</strong>: GlobalScope 금지 → 부모 스코프가 자식 관리 → leak/취소 누락 방지.
+            ②<strong>suspend 함수는 "순차 코드처럼 읽힘"</strong>: Future/Mono 체인보다 디버깅 쉬움.
+            ③<strong>Spring 6 통합</strong>: Controller에서 <code>suspend</code> 직접 지원.
+            ④<strong>경량</strong>: 수천 코루틴도 문제 없음 → 글로벌 서비스의 동시 요청에 대응.
+            ⑤ <strong>Virtual Threads는 아직 이른 편</strong>. Java 21이 LTS지만 생태계 대응이 완료된 2-3년 후 고려.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="orm">⑤ ORM/DB 접근</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        데이터 접근 기술
+        <span class="chosen">Spring Data JPA (기본) + JOOQ (복잡 쿼리)</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Spring Data JPA (Hibernate)</td>
+              <td class="pros">Repository 자동 생성, 영속성 컨텍스트, 생산성 높음, 표준</td>
+              <td class="cons">N+1 함정, LazyInit 이슈, 복잡 쿼리 표현 제약, 러닝커브</td>
+            </tr>
+            <tr class="chosen-row">
+              <td class="option-name">JOOQ</td>
+              <td class="pros">타입 안전 SQL, 복잡 쿼리 가독성, DB 기능 그대로 사용</td>
+              <td class="cons">상용 라이선스(상용 DB), 코드 생성 설정 필요</td>
+            </tr>
+            <tr>
+              <td class="option-name">JDBC Template</td>
+              <td class="pros">가벼움, SQL 그대로, 성능 예측 가능</td>
+              <td class="cons">RowMapper 반복, 관계 매핑 수동</td>
+            </tr>
+            <tr>
+              <td class="option-name">MyBatis</td>
+              <td class="pros">XML mapper로 SQL/Java 분리, 레거시 호환, 국내 레거시 많음</td>
+              <td class="cons">XML 관리 번거로움, 컴파일 타임 타입 체크 약함</td>
+            </tr>
+            <tr>
+              <td class="option-name">Exposed (JetBrains)</td>
+              <td class="pros">Kotlin-first DSL, 경량</td>
+              <td class="cons">Spring 통합 약함, 문서/커뮤니티 작음, Repository 추상화 없음</td>
+            </tr>
+            <tr>
+              <td class="option-name">R2DBC (리액티브)</td>
+              <td class="pros">non-blocking DB, WebFlux와 짝</td>
+              <td class="cons">JPA 기능 없음, 라이브러리 미성숙, 디버깅 어려움</td>
+            </tr>
+            <tr>
+              <td class="option-name">QueryDSL</td>
+              <td class="pros">JPA 기반 타입 안전 쿼리, JPA와 공존</td>
+              <td class="cons">APT 설정 복잡, Q-class 생성 관리, Spring Boot 3에서 호환 이슈(버전 선택 주의)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="scenario">
+          <b>우리의 상황</b>: 대부분 CRUD + 일부 복잡 집계(통계/리포트). 스키마 관계 있음(사용자-주문-결제). 팀이 JPA에 익숙.
+        </div>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: JPA (기본) + JOOQ (필요시)</div>
+          <p style="margin: 0;">
+            ①<strong>JPA</strong>로 간단한 CRUD 80%를 생산성 있게 처리. <code>JpaRepository</code> 인터페이스 선언만으로 기본 동작.
+            ②<strong>QueryDSL</strong>로 동적 검색 쿼리(검색 필터 등).
+            ③<strong>JOOQ</strong> 또는 Native SQL로 복잡 집계(window 함수, CTE 등). JPQL로 표현 불가능한 것들.
+            ④<strong>R2DBC는 아직 성숙도 부족</strong>. WebFlux 전용일 때만 고려.
+            <br><br>
+            <strong>대표 안티패턴 피하기</strong>: Entity를 API 응답에 직접 노출 금지 → DTO 변환.
+            모든 관계는 LAZY 기본 → N+1은 fetch join/@EntityGraph로 해결.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="cache">⑥ 캐싱</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        분산 캐시 서버
+        <span class="chosen">Redis</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Redis</td>
+              <td class="pros">자료구조 풍부(String/Hash/List/Set/ZSet/Stream), Pub/Sub, Lua, persistence, 커뮤니티 최대</td>
+              <td class="cons">단일 스레드(쓰기), 메모리 제약, 복잡한 쿼리 없음</td>
+            </tr>
+            <tr>
+              <td class="option-name">Memcached</td>
+              <td class="pros">극단적 단순, 멀티 스레드, 약간 더 낮은 지연</td>
+              <td class="cons">String만 지원, Pub/Sub 없음, 복제 없음</td>
+            </tr>
+            <tr>
+              <td class="option-name">Hazelcast</td>
+              <td class="pros">JVM 내장 분산 맵, 연산 분산</td>
+              <td class="cons">Redis 대비 생태계 작음, 비용 모델</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: Redis</div>
+          <p style="margin: 0;">
+            <strong>단순 KV 캐시라면 Memcached</strong>도 충분하지만, 대부분 서비스는 금방 캐시 이상의 기능이 필요해집니다:
+            세션 저장, 분산 락(SET NX), rate limit(INCR + EXPIRE), 랭킹(ZSet), Pub/Sub, queue(List/Stream).
+            <strong>Redis는 "다용도 in-memory 도구"</strong>로 자리잡아 사실상 표준.
+            AWS에선 ElastiCache Redis로 관리형 이용.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-header">
+        Redis 클라이언트
+        <span class="chosen">Lettuce</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Lettuce</td>
+              <td class="pros">Netty 기반 non-blocking, 단일 연결 공유, 리액티브 지원, Spring Boot 기본</td>
+              <td class="cons">블로킹 API 쓸 땐 차이 없음</td>
+            </tr>
+            <tr>
+              <td class="option-name">Jedis</td>
+              <td class="pros">단순하고 안정적, 오래됨</td>
+              <td class="cons">연결 풀 필수(블로킹), 동시성에 풀 크기 제약</td>
+            </tr>
+            <tr>
+              <td class="option-name">Redisson</td>
+              <td class="pros">Java 자료구조 추상화(RLock, RMap), 분산 락 쉬움, 엔터프라이즈 기능</td>
+              <td class="cons">추가 학습, 일부 유료 기능</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: Lettuce (기본) + Redisson (분산 락 필요시)</div>
+          <p style="margin: 0;">
+            ①Lettuce가 Spring Boot 기본 — 설정 없이 동작.
+            ②<strong>분산 락</strong>이 필요한 특수 케이스는 Redisson의 <code>RLock</code>이 Raw SET NX 직접 구현보다 안전(자동 lease 갱신, Redlock 지원).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-header">
+        캐시 추상화
+        <span class="chosen">Spring Cache (@Cacheable)</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Spring Cache (@Cacheable)</td>
+              <td class="pros">선언적, 캐시 백엔드 교체 용이, 어노테이션으로 끝</td>
+              <td class="cons">프록시 기반 제약(내부 호출), 복잡한 로직 표현 제한</td>
+            </tr>
+            <tr>
+              <td class="option-name">RedisTemplate 직접</td>
+              <td class="pros">세밀 제어, Lua 스크립트, 특수 자료구조</td>
+              <td class="cons">보일러플레이트 많음</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: 둘 다 필요</div>
+          <p style="margin: 0;">
+            ①<strong>단순 "결과 캐싱"은 @Cacheable</strong> — 가독성 좋고 캐시 이름으로 TTL 관리.
+            ②<strong>복잡한 로직</strong>(증분 카운터, 랭킹, 분산 락, pub/sub)은 RedisTemplate 또는 Redisson 직접 사용.
+            두 방식 공존.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="mq">⑦ 메시지 브로커</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        메시지/이벤트 시스템
+        <span class="chosen">AWS SQS + Kafka (병용)</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Kafka</td>
+              <td class="pros">대용량 스트림, 순서 보장(파티션), 재처리 가능(로그 기반), 연합 consumer group</td>
+              <td class="cons">운영 복잡(ZooKeeper/KRaft), topic 설계 학습, MSK 비용</td>
+            </tr>
+            <tr class="chosen-row">
+              <td class="option-name">AWS SQS</td>
+              <td class="pros">완전 관리형, 간단, 무한 확장, DLQ 내장</td>
+              <td class="cons">순서 제한(FIFO 큐의 처리량 낮음), 스트리밍 아님, 메시지 보존 최대 14일</td>
+            </tr>
+            <tr>
+              <td class="option-name">RabbitMQ</td>
+              <td class="pros">강력한 라우팅(exchange), AMQP 표준, 개발 쉬움</td>
+              <td class="cons">처리량 Kafka 대비 낮음, 클러스터 운영 복잡</td>
+            </tr>
+            <tr>
+              <td class="option-name">AWS SNS + SQS (fan-out)</td>
+              <td class="pros">SNS topic → 여러 SQS 큐, 관리형</td>
+              <td class="cons">순서 보장 없음</td>
+            </tr>
+            <tr>
+              <td class="option-name">Redis Pub/Sub</td>
+              <td class="pros">간단, 지연 낮음</td>
+              <td class="cons">구독자 오프라인이면 손실(at-most-once)</td>
+            </tr>
+            <tr>
+              <td class="option-name">NATS</td>
+              <td class="pros">매우 낮은 지연, 단순</td>
+              <td class="cons">persistence 약함(JetStream 쓰지 않으면), 생태계 작음</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="scenario">
+          <b>우리의 상황</b>: 서비스 간 비동기 이벤트 + 실시간 광고 노출 로그 스트림. AWS 기반 인프라.
+        </div>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: SQS + Kafka 병용</div>
+          <p style="margin: 0;">
+            ①<strong>간단한 작업 큐 → SQS</strong>: 이메일 전송, 알림, 썸네일 생성 등. 관리형이라 운영 부담 적음.
+            ②<strong>이벤트 스트리밍 → Kafka</strong>: 광고 노출/클릭 이벤트(수만 TPS), 실시간 집계(Kinesis Analytics/Flink).
+            ③ 둘 다 필요한 건 <strong>다른 문제를 해결</strong>하기 때문. SQS는 "작업 처리", Kafka는 "이벤트 로그".
+            ④ <strong>초기엔 SQS만으로 시작</strong>, 분석/스트리밍 수요 생기면 Kafka 추가가 실전 패턴.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="http">⑧ HTTP 클라이언트</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        외부 API 호출
+        <span class="chosen">WebClient (또는 Ktor Client)</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Spring WebClient</td>
+              <td class="pros">non-blocking, Spring 통합, Mono/Flux + 코루틴 <code>awaitXxx</code> 지원</td>
+              <td class="cons">Reactor 러닝커브(단, 코루틴으로 회피)</td>
+            </tr>
+            <tr class="chosen-row">
+              <td class="option-name">Ktor Client</td>
+              <td class="pros">Kotlin-first, 코루틴 네이티브, 엔진 교체 가능(OkHttp, CIO)</td>
+              <td class="cons">Spring 생태계와 덜 통합</td>
+            </tr>
+            <tr>
+              <td class="option-name">RestTemplate</td>
+              <td class="pros">단순, 익숙</td>
+              <td class="cons"><strong>deprecated</strong>(Spring 6에서 유지 보수 모드), 블로킹</td>
+            </tr>
+            <tr>
+              <td class="option-name">OkHttp</td>
+              <td class="pros">Android 표준, 낮은 레벨 제어</td>
+              <td class="cons">Spring 통합 수동 필요, 비동기 DSL 수동</td>
+            </tr>
+            <tr>
+              <td class="option-name">Feign (Spring Cloud OpenFeign)</td>
+              <td class="pros">인터페이스 선언으로 자동 구현(Repository 느낌)</td>
+              <td class="cons">코루틴 지원 약함, 디버깅 어려움</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거</div>
+          <p style="margin: 0;">
+            ①<strong>RestTemplate은 피하기</strong>: deprecated, 블로킹.
+            ②<strong>WebClient</strong>: Spring 표준, 코루틴 <code>awaitBody()</code>로 suspend 함수에서 자연스럽게.
+            ③<strong>Ktor Client</strong>: 순수 Kotlin 선호 + Spring 의존 최소화.
+            실무는 WebClient가 더 많고, Kotlin-only 프로젝트엔 Ktor도 증가.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="serialization">⑨ 직렬화 (JSON)</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        JSON 직렬화
+        <span class="chosen">Jackson + kotlin-module</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Jackson</td>
+              <td class="pros">Spring 기본, 풍부한 어노테이션, kotlin-module로 data class/null 지원, 생태계 최대</td>
+              <td class="cons">리플렉션 기반(그래서 GraalVM native 약간 설정 필요)</td>
+            </tr>
+            <tr>
+              <td class="option-name">kotlinx.serialization</td>
+              <td class="pros">Kotlin-first, 컴파일타임 처리, ktor 기본, 타입 안전</td>
+              <td class="cons">Spring 통합 수동, 어노테이션 별도(@Serializable)</td>
+            </tr>
+            <tr>
+              <td class="option-name">Gson</td>
+              <td class="pros">Google, 심플한 API</td>
+              <td class="cons">Kotlin null 처리 약함, Jackson 대비 기능 적음</td>
+            </tr>
+            <tr>
+              <td class="option-name">Moshi</td>
+              <td class="pros">Kotlin 친화, Square 생태계(Retrofit), 코드 생성 옵션</td>
+              <td class="cons">Spring Boot에 통합 작음</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: Jackson</div>
+          <p style="margin: 0;">
+            ①<strong>Spring Boot 기본</strong>이라 설정 불필요.
+            ②<code>jackson-module-kotlin</code>이 data class, null, default parameter를 올바르게 처리.
+            ③<strong>kotlinx.serialization은 Ktor 프로젝트</strong>에서 선호 — Spring 환경에선 Jackson이 계속 표준.
+            ④ Kotlin만 쓰고 GraalVM native 빌드가 필수면 kotlinx.serialization 고려.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="test">⑩ 테스트 도구</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        테스트 프레임워크
+        <span class="chosen">JUnit 5 + MockK + AssertJ + Testcontainers</span>
+      </div>
+      <div class="decision-body">
+
+        <h3>테스트 러너</h3>
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">JUnit 5</td>
+              <td class="pros">표준, Spring Boot 기본, @Nested/@Parameterized, Extension 모델</td>
+              <td class="cons">Kotlin 문법이 관용적이지 않은 부분(companion @JvmStatic 등)</td>
+            </tr>
+            <tr>
+              <td class="option-name">Kotest</td>
+              <td class="pros">Kotlin-first DSL, Property-based testing, 풍부한 assertion</td>
+              <td class="cons">Spring과 통합 복잡(test-context 재로드 이슈), 팀 러닝커브</td>
+            </tr>
+            <tr>
+              <td class="option-name">TestNG</td>
+              <td class="pros">data provider, 병렬 실행</td>
+              <td class="cons">주로 레거시, Spring 통합 JUnit만큼 성숙 X</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Mocking</h3>
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">MockK</td>
+              <td class="pros">Kotlin 전용, suspend 지원(coEvery), final class 기본 mock, DSL 좋음</td>
+              <td class="cons">Mockito 대비 히스토리 짧음</td>
+            </tr>
+            <tr>
+              <td class="option-name">Mockito + mockito-kotlin</td>
+              <td class="pros">Java 생태계 호환, 문서 많음</td>
+              <td class="cons">Kotlin final 해결에 mockito-inline 필요, suspend 함수 직접 지원 X</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Assertion</h3>
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">AssertJ</td>
+              <td class="pros">fluent API, 풍부한 assertion, Spring 기본</td>
+              <td class="cons">Java 스타일</td>
+            </tr>
+            <tr>
+              <td class="option-name">Kotest assertions</td>
+              <td class="pros">Kotlin infix(<code>shouldBe</code>), 가독성</td>
+              <td class="cons">추가 의존성, 팀 러닝커브</td>
+            </tr>
+            <tr>
+              <td class="option-name">kotlin.test (JUnit built-in)</td>
+              <td class="pros">의존 없음, 간단</td>
+              <td class="cons">assertion 기능 빈약</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>통합 테스트 DB</h3>
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Testcontainers</td>
+              <td class="pros">실제 PostgreSQL/Redis/Kafka 컨테이너, 프로덕션 동일 환경</td>
+              <td class="cons">기동 느림(~5초), Docker 필요</td>
+            </tr>
+            <tr>
+              <td class="option-name">H2 in-memory</td>
+              <td class="pros">빠름, 설정 간편</td>
+              <td class="cons">PostgreSQL 방언과 차이(JSONB, window 함수 등) → 운영에서 버그</td>
+            </tr>
+            <tr>
+              <td class="option-name">Embedded Postgres (Zonky)</td>
+              <td class="pros">실제 Postgres 바이너리 내장</td>
+              <td class="cons">리소스 소비, 유지보수 낮아짐</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">종합 선택 근거</div>
+          <p style="margin: 0;">
+            <strong>JUnit 5 + MockK + AssertJ + Testcontainers</strong> 조합이 Spring Boot + Kotlin의 <strong>표준</strong>입니다.
+            Kotest는 Kotlin-first 프로젝트에선 장점이지만 Spring Context 재로드 이슈로 실무에선 JUnit 5가 안정적.
+            H2 대신 Testcontainers를 쓰는 이유는 <strong>"로컬에선 통과, 운영에서 장애"</strong>의 가장 흔한 원인이 방언 차이라서.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="deploy">⑪ 배포/오케스트레이션</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        AWS 컨테이너 런타임
+        <span class="chosen">ECS Fargate (중소) → EKS (대규모)</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">ECS Fargate</td>
+              <td class="pros">서버리스(노드 관리 X), AWS 통합 최고, 가격 단순, 설정 쉬움</td>
+              <td class="cons">AWS 전용, 복잡한 멀티-테넌시 부족</td>
+            </tr>
+            <tr>
+              <td class="option-name">EKS</td>
+              <td class="pros">표준 Kubernetes API, multi-cloud 이동, Service Mesh, 풍부한 생태계</td>
+              <td class="cons">운영 복잡(노드/pod/네트워크), DevOps 전담 필요</td>
+            </tr>
+            <tr>
+              <td class="option-name">EC2 직접</td>
+              <td class="pros">완전 제어, 가격 최적</td>
+              <td class="cons">AMI/Auto Scaling/배포 직접 관리</td>
+            </tr>
+            <tr>
+              <td class="option-name">Lambda</td>
+              <td class="pros">이벤트 기반, 서버리스, 비용(idle 0)</td>
+              <td class="cons">15분 제한, cold start, 상시 서비스 부적합</td>
+            </tr>
+            <tr>
+              <td class="option-name">Elastic Beanstalk</td>
+              <td class="pros">"Heroku 스타일", 초간단</td>
+              <td class="cons">커스텀 제약, 구세대</td>
+            </tr>
+            <tr>
+              <td class="option-name">App Runner</td>
+              <td class="pros">간단, 자동 스케일, HTTPS 자동</td>
+              <td class="cons">신규 서비스라 기능 미흡</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: ECS Fargate</div>
+          <p style="margin: 0;">
+            <strong>팀 규모/복잡도</strong>가 기준:
+            <br>① <strong>~10명 팀</strong>: Fargate. 학습/운영 부담 최소, 기능은 충분.
+            <br>② <strong>30명+ & 복잡 MSA & Service Mesh</strong>: EKS. 표준 k8s + 추상화 고도화.
+            <br>③ <strong>간헐적 이벤트 처리</strong>: Lambda.
+            <br>티니어 같은 성장 단계 회사는 <strong>Fargate로 시작 → 수년 후 EKS 이전</strong>이 일반적.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-header">
+        DB 관리형
+        <span class="chosen">RDS Aurora PostgreSQL</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Aurora PostgreSQL</td>
+              <td class="pros">PostgreSQL 호환 + 빠른 복구, Read Replica 15개+, Global Database, 고성능</td>
+              <td class="cons">가격 RDS보다 비쌈, Lock-in</td>
+            </tr>
+            <tr>
+              <td class="option-name">RDS PostgreSQL</td>
+              <td class="pros">가성비, 표준 PostgreSQL</td>
+              <td class="cons">Aurora 대비 복구 느림, 복제 지연</td>
+            </tr>
+            <tr>
+              <td class="option-name">RDS MySQL</td>
+              <td class="pros">MySQL 호환, 더 저렴</td>
+              <td class="cons">JSON/배열 등 PostgreSQL 대비 기능 약함</td>
+            </tr>
+            <tr>
+              <td class="option-name">DynamoDB</td>
+              <td class="pros">서버리스, 무한 확장, 지연 한 자릿수 ms</td>
+              <td class="cons">관계/JOIN 없음, 복잡 쿼리 설계 어려움</td>
+            </tr>
+            <tr>
+              <td class="option-name">self-hosted on EC2</td>
+              <td class="pros">완전 제어, 커스텀 설정</td>
+              <td class="cons">백업/HA/패치 전부 자체 관리</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: Aurora PostgreSQL</div>
+          <p style="margin: 0;">
+            ①<strong>PostgreSQL</strong>이 MySQL보다 기능 풍부(JSONB, CTE, window 함수, partial index 등).
+            ②<strong>Aurora</strong>는 RDS 대비 30~40% 빠르고 장애 복구 &lt;30초. 대규모 글로벌 서비스에 적합.
+            ③<strong>Global Database</strong>로 region 간 read replica — 글로벌 서비스에 필수.
+            ④DynamoDB는 특정 패턴(고정 query pattern, massive scale)에만. 일반 CRUD엔 RDBMS가 생산성/유연성 우위.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="observability">⑫ 관측성</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        메트릭 수집
+        <span class="chosen">Micrometer → Prometheus (또는 Datadog)</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Micrometer + Prometheus + Grafana</td>
+              <td class="pros">오픈소스, 비용 0, 유연 (PromQL), 표준화</td>
+              <td class="cons">운영 직접 (Prometheus HA, 디스크 관리), 학습 곡선</td>
+            </tr>
+            <tr>
+              <td class="option-name">Datadog</td>
+              <td class="pros">즉시 사용, 뛰어난 UI, APM/Logs/RUM 통합</td>
+              <td class="cons">비용 (호스트당 월 15$+), 데이터 락인</td>
+            </tr>
+            <tr>
+              <td class="option-name">New Relic</td>
+              <td class="pros">APM 강력, Datadog 경쟁</td>
+              <td class="cons">비용, 한국 사용 상대적으로 적음</td>
+            </tr>
+            <tr>
+              <td class="option-name">CloudWatch</td>
+              <td class="pros">AWS 네이티브, 기본 메트릭 자동</td>
+              <td class="cons">복잡한 커스텀 메트릭 비용 높음, 시각화/알림 약함</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거</div>
+          <p style="margin: 0;">
+            ①<strong>Micrometer 코드</strong>는 백엔드 중립: Prometheus/Datadog/CloudWatch 중 어느 것이든 설정 변경으로 전환 가능.
+            ②<strong>초기 스타트업/중소 기업</strong>: Datadog이 빠른 출시에 유리 (Time to Value).
+            ③<strong>성장/비용 관리</strong>: Prometheus self-hosted 전환 고려 (Datadog 비용 곡선).
+            ④<strong>AWS 의존 기본 메트릭</strong>: CloudWatch는 자동 수집되는 부분만 활용, 커스텀은 Prometheus.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-header">
+        로그 수집
+        <span class="chosen">CloudWatch Logs (또는 Datadog Logs)</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">CloudWatch Logs</td>
+              <td class="pros">ECS 자동 연동, 무 설정, AWS 기본</td>
+              <td class="cons">검색 UI 약함, 장기 보관 비쌈, Insights 쿼리 제한적</td>
+            </tr>
+            <tr>
+              <td class="option-name">ELK (Elasticsearch + Logstash + Kibana)</td>
+              <td class="pros">강력한 검색, 대시보드, self-host 가능</td>
+              <td class="cons">운영 복잡, Elasticsearch 인덱스 관리 비쌈</td>
+            </tr>
+            <tr>
+              <td class="option-name">Grafana Loki</td>
+              <td class="pros">경량(인덱스 최소), Prometheus와 통합, 비용 효율</td>
+              <td class="cons">풀텍스트 검색 약함, 관리 필요</td>
+            </tr>
+            <tr>
+              <td class="option-name">Datadog Logs</td>
+              <td class="pros">APM과 통합, 우수한 UI</td>
+              <td class="cons">수집량 기반 비용(급증 주의)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: 상황별 다름</div>
+          <p style="margin: 0;">
+            AWS 중심 팀은 <strong>CloudWatch Logs로 시작</strong>(설정 불필요). 로그량이 많아지면 Loki(저렴) 또는 Datadog(UI 강력) 고려.
+            ELK는 성숙하지만 <strong>운영 부담</strong>으로 최근엔 감소 추세.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="ci">⑬ CI/CD</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        CI/CD 플랫폼
+        <span class="chosen">GitHub Actions</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">GitHub Actions</td>
+              <td class="pros">GitHub 네이티브, 무료 할당량, 커뮤니티 action 수천개, OIDC로 AWS 연동</td>
+              <td class="cons">self-hosted runner 관리 필요(대규모), ARM runner 유료</td>
+            </tr>
+            <tr>
+              <td class="option-name">Jenkins</td>
+              <td class="pros">플러그인 생태계 최대, 자체 호스팅 완전 제어</td>
+              <td class="cons">운영 부담, 플러그인 취약점 이슈, 설정 XML/Groovy</td>
+            </tr>
+            <tr>
+              <td class="option-name">GitLab CI</td>
+              <td class="pros">GitLab 네이티브, .gitlab-ci.yml 단순</td>
+              <td class="cons">GitLab 쓸 때만</td>
+            </tr>
+            <tr>
+              <td class="option-name">CircleCI</td>
+              <td class="pros">깔끔한 UI, 빠른 runner</td>
+              <td class="cons">비용, GitHub Actions와 차별성 줄어듦</td>
+            </tr>
+            <tr>
+              <td class="option-name">AWS CodePipeline + CodeBuild</td>
+              <td class="pros">AWS 완전 통합, IAM 기반 권한</td>
+              <td class="cons">UI 불편, 학습 곡선, YAML 길어짐</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: GitHub Actions</div>
+          <p style="margin: 0;">
+            ①<strong>GitHub 사용하면 기본 선택</strong>. 저장소 옆에서 파이프라인 관리 UI.
+            ②<strong>AWS OIDC 통합</strong>: 정적 AWS key 없이 연합 인증, 보안 +.
+            ③<strong>Jenkins의 시대는 저물고</strong> 있음 — 운영 부담 크고 SaaS 대안이 충분.
+            ④ 월 2,000분 무료는 소규모 팀엔 충분. 대규모 병렬 빌드는 self-hosted ARC(Actions Runner Controller)로.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2 id="project">⑭ 이 프로젝트(gate-futures-bot)의 구체적 선택들</h2>
+
+    <div class="decision">
+      <div class="decision-header">
+        동시성: 별도 프로세스 vs 스레드 vs 코루틴
+        <span class="chosen">Kotlin Coroutines</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="option-name">별도 JVM 프로세스 (코인마다)</td>
+              <td class="pros">OS 수준 에러 격리, 메모리 완전 분리</td>
+              <td class="cons">프로세스당 ~150MB, IPC(Redis 등) 필요, 배포 복잡</td>
+            </tr>
+            <tr>
+              <td class="option-name">스레드 + ExecutorService</td>
+              <td class="pros">Java 표준, 모든 라이브러리 호환</td>
+              <td class="cons">수천 스레드 불가, Future 체인 어색</td>
+            </tr>
+            <tr class="chosen-row">
+              <td class="option-name">Kotlin Coroutines</td>
+              <td class="pros">경량(수KB), supervisorScope로 에러 격리, suspend 함수의 순차 코드 모양</td>
+              <td class="cons">Java 라이브러리의 블로킹 호출시 주의 필요</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: Coroutines</div>
+          <p style="margin: 0;">
+            <strong>학습 목적 + 현대 Kotlin 핵심 기술</strong>이라는 의도적 선택. 별도 프로세스가 "더 안전"하지만, 단일 JVM에서 코루틴으로도 충분한 격리(<code>supervisorScope</code>) 달성 가능.
+            메모리 효율 월등하고, 학습 가치 높음.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-header">
+        Rate Limiting 알고리즘
+        <span class="chosen">Token Bucket</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">Token Bucket</td>
+              <td class="pros">burst 허용(capacity 내), 평균 rate 제어, 단순</td>
+              <td class="cons">긴 idle 후 갑작스런 burst 대응 주의</td>
+            </tr>
+            <tr>
+              <td class="option-name">Leaky Bucket</td>
+              <td class="pros">출력 rate 고정(smoothing 효과)</td>
+              <td class="cons">burst 완전 차단(사용자 경험 나쁨)</td>
+            </tr>
+            <tr>
+              <td class="option-name">Fixed Window Counter</td>
+              <td class="pros">구현 단순(Redis INCR)</td>
+              <td class="cons">window 경계에서 2배 burst 가능</td>
+            </tr>
+            <tr>
+              <td class="option-name">Sliding Window Log</td>
+              <td class="pros">정확한 rate 측정</td>
+              <td class="cons">메모리/CPU 비용 큼</td>
+            </tr>
+            <tr>
+              <td class="option-name">Sliding Window Counter</td>
+              <td class="pros">정확도 + 효율의 절충</td>
+              <td class="cons">구현 약간 복잡</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: Token Bucket</div>
+          <p style="margin: 0;">
+            Gate.io API는 <strong>"초당 N개 + 약간의 burst 허용"</strong> 정책. Token Bucket이 이 의미와 정확히 일치:
+            capacity = burst 상한, refill rate = 평균 허용 rate. <strong>Leaky Bucket은 burst를 막아</strong> 앱 시작시 캔들 대량 조회가 느려짐.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-header">
+        Rate Limiter 저장소
+        <span class="chosen">In-memory (단일 프로세스)</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">In-memory (Kotlin Mutex)</td>
+              <td class="pros">0 지연, 의존성 0, 단일 프로세스에 충분</td>
+              <td class="cons">프로세스 여러 대면 전체 rate 제어 불가</td>
+            </tr>
+            <tr>
+              <td class="option-name">Redis (SET + Lua)</td>
+              <td class="pros">분산 환경, 여러 인스턴스 합산</td>
+              <td class="cons">Redis 의존, 네트워크 왕복(~1ms)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거 + 확장 대비</div>
+          <p style="margin: 0;">
+            <strong>단일 프로세스</strong>에서 동작하는 개인 봇이라 in-memory가 최적. 하지만
+            <strong><code>RateLimiter</code> interface</strong>를 추출해 <strong>Redis 구현으로 교체 용이</strong>하게 설계.
+            "지금 필요 없지만 교체 지점을 만들어 둠"이 YAGNI와의 타협점.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-header">
+        ExitCondition 표현: sealed class vs enum + fields
+        <span class="chosen">sealed class</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">sealed class 계층</td>
+              <td class="pros">각 타입 고유 필드(TakeProfitPct는 pct, IndicatorExit는 indicator/period 등), exhaustive when</td>
+              <td class="cons">YAML 바인딩이 번거로움(별도 Spec data class 필요)</td>
+            </tr>
+            <tr>
+              <td class="option-name">enum + nullable fields</td>
+              <td class="pros">YAML 바인딩 자연스러움</td>
+              <td class="cons">IndicatorExit일 때 pct=null, TakeProfitPct일 때 indicator=null 등 <strong>의미 없는 조합 허용</strong> → 런타임 검증 필요</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: sealed class (도메인), Spec data class (YAML 바인딩)</div>
+          <p style="margin: 0;">
+            <strong>도메인 계층</strong>은 sealed class로 타입 안전성 확보(<code>when</code>이 모든 케이스를 컴파일 타임 검증).
+            <strong>설정(YAML) 계층</strong>은 data class + type 필드로 YAML 바인딩 용이. <code>StrategyAssembler</code>가 Spec → sealed class 변환하며 validation 수행.
+            <strong>타입 계층 × 설정 계층 분리</strong>가 관용적 해법.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-header">
+        설정 주입 방식
+        <span class="chosen">@ConfigurationProperties + @Validated</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">@ConfigurationProperties + @Validated</td>
+              <td class="pros">타입 안전, 기본값 data class로 표현, 부팅 시 검증(BindException), IDE 자동완성</td>
+              <td class="cons">class 선언 필요</td>
+            </tr>
+            <tr>
+              <td class="option-name">@Value("${...}")</td>
+              <td class="pros">개별 값 주입 단순</td>
+              <td class="cons">타입 변환 수동, 그룹화 불가, 검증 수동</td>
+            </tr>
+            <tr>
+              <td class="option-name">System.getenv()</td>
+              <td class="pros">환경변수만</td>
+              <td class="cons">Spring 기능 못씀, 하드코딩 느낌</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거</div>
+          <p style="margin: 0;">
+            설정은 <strong>여러 관련 값이 그룹화</strong>되는 게 일반적(bot.contracts, bot.leverage, bot.orderSize...). 타입 안전 + 부팅 시 검증으로 <strong>잘못된 설정으로 부팅되지 않음</strong>을 보장.
+            <code>@Value</code>는 단일 값 또는 실험적 feature flag 정도에만.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-header">
+        예외 처리: sealed class vs 일반 Exception
+        <span class="chosen">sealed class 계층</span>
+      </div>
+      <div class="decision-body">
+        <table class="candidates">
+          <thead><tr><th>후보</th><th class="pros">장점</th><th class="cons">단점</th></tr></thead>
+          <tbody>
+            <tr class="chosen-row">
+              <td class="option-name">sealed GateFuturesException</td>
+              <td class="pros">도메인별 예외 타입(Auth/Insufficient/Order/RateLimit/Position/MarketData), catch에서 exhaustive when 가능</td>
+              <td class="cons">초기 설계 비용</td>
+            </tr>
+            <tr>
+              <td class="option-name">단일 RuntimeException + 메시지</td>
+              <td class="pros">단순</td>
+              <td class="cons">catch에서 구분 못함, 로깅/응답 매핑 어려움</td>
+            </tr>
+            <tr>
+              <td class="option-name">Result&lt;T, Error&gt; 패턴</td>
+              <td class="pros">타입으로 실패 표현, try/catch 불필요</td>
+              <td class="cons">Spring AOP/트랜잭션 롤백과 궁합 약함, 모든 호출자가 처리 강제</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="reason-box">
+          <div class="title">선택 근거: sealed class</div>
+          <p style="margin: 0;">
+            Spring 생태계에선 <strong>예외 기반</strong>이 표준(@Transactional 롤백, @ControllerAdvice 전역 처리). sealed class로 도메인 예외를 정의하면 <strong>계층 명확 + when 안전</strong>.
+            완전 순수 함수형 코드라면 Result 패턴도 좋지만, 실무 Spring 코드엔 sealed Exception이 정답.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <h2>종합 정리: "왜"를 답하는 훈련</h2>
+
+    <div class="box box-tip">
+      <div class="box-title">면접에서 기술 선택 질문 대답 구조</div>
+      <ol>
+        <li><strong>맥락 확인</strong>: "이 상황에서 요구사항은 [A], [B], [C]입니다"</li>
+        <li><strong>후보 나열</strong>: "선택지로는 [X, Y, Z]가 있었고"</li>
+        <li><strong>Pros/Cons 비교</strong>: "X는 ~했지만 ~단점, Y는 ~"</li>
+        <li><strong>우리 상황 매칭</strong>: "우리는 [제약]이 있었기 때문에"</li>
+        <li><strong>선택과 근거</strong>: "Z를 선택했고 이유는 [구체적 이점]"</li>
+        <li><strong>미래 대비</strong>: "만약 [변화]가 생기면 [대안]으로 전환 가능"</li>
+      </ol>
+      <p style="margin-bottom: 0;">
+        이 구조로 대답하면 면접관에게 <strong>"고민해서 선택했다"는 신호</strong>가 확실히 전달됩니다.
+        "Spring 써서요"가 아니라 "Quarkus, Micronaut도 봤지만 팀 역량과 생태계 고려해서 Spring Boot로 갔습니다".
+      </p>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="index.html">&larr; 목차로</a>
+      <a href="01-overview.html">처음부터 읽기 &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+</body>
+</html>

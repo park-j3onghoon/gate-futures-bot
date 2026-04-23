@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>07 - Gradle | Python → Kotlin</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .code-py::before { content: "Python/pip"; display: block; padding: 6px 12px; background: #10b981; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .code-kt::before { content: "Kotlin/Gradle"; display: block; padding: 6px 12px; background: #3b82f6; color: white; font-size: 12px; font-weight: 700; border-radius: 8px 8px 0 0; }
+    .side-by-side pre { margin: 0 !important; border-radius: 0 0 8px 8px !important; }
+    .box-project { border-left: 4px solid #7c3aed; background: #faf5ff; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .box-project .box-title { color: #7c3aed; font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+    .box-project .file-ref { font-size: 12px; color: #6b7280; font-family: monospace; background: white; padding: 2px 6px; border-radius: 4px; }
+    .qa { background: #fef7e0; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .qa .q { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+    .scope-table th { background: #7c3aed; color: white; padding: 10px; text-align: left; font-size: 13px; }
+    .scope-table td { padding: 10px; border: 1px solid #e5e7eb; font-size: 13px; vertical-align: top; }
+    .lifecycle {
+      display: flex; gap: 8px; align-items: center; justify-content: center;
+      padding: 20px; background: #f9fafb; border-radius: 10px; flex-wrap: wrap;
+    }
+    .lc-box {
+      padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      color: white; background: #3b82f6;
+    }
+    .lc-box.late { background: #7c3aed; }
+    .lc-arrow { color: #6b7280; font-size: 18px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="guide-header">
+      <h1>07 - Gradle 빌드 시스템</h1>
+      <p class="subtitle">pip + setup.py + Makefile을 합쳐놓은 것</p>
+    </header>
+
+    <div class="toc">
+      <h3>목차</h3>
+      <ol>
+        <li><a href="#what">Gradle이란 무엇인가 (pip과 다른 점)</a></li>
+        <li><a href="#wrapper">Gradle Wrapper</a></li>
+        <li><a href="#structure">build.gradle.kts 해부</a></li>
+        <li><a href="#deps">의존성 선언과 Scope</a></li>
+        <li><a href="#repos">Repository (Maven Central vs PyPI)</a></li>
+        <li><a href="#tasks">Task와 라이프사이클</a></li>
+        <li><a href="#plugins">Plugin</a></li>
+        <li><a href="#multi">Multi-module</a></li>
+        <li><a href="#version-catalog">Version Catalog</a></li>
+        <li><a href="#project">gate-futures-bot build.gradle.kts 분석</a></li>
+        <li><a href="#interview">예상 면접 질문</a></li>
+      </ol>
+    </div>
+
+    <h2 id="what"><span class="section-num">1</span> Gradle이란 무엇인가</h2>
+    <p>
+      Gradle은 <strong>빌드 시스템이자 의존성 매니저이자 태스크 러너</strong>입니다. Python 생태계에서 대응 도구를 하나로 묶으면:
+    </p>
+    <table>
+      <thead><tr><th>역할</th><th>Python</th><th>Kotlin/JVM</th></tr></thead>
+      <tbody>
+        <tr><td>패키지 설치</td><td><code>pip install</code></td><td><code>gradle dependencies</code> (Maven Central에서 자동 다운로드)</td></tr>
+        <tr><td>의존성 선언</td><td><code>requirements.txt</code> / <code>pyproject.toml</code></td><td><code>build.gradle.kts</code>의 <code>dependencies { }</code> 블록</td></tr>
+        <tr><td>패키징</td><td><code>python -m build</code> / wheel</td><td><code>./gradlew bootJar</code> → 실행 가능 JAR</td></tr>
+        <tr><td>태스크 실행</td><td><code>make test</code> / tox</td><td><code>./gradlew test</code></td></tr>
+        <tr><td>가상 환경</td><td>venv / poetry</td><td>불필요 (JVM은 분리된 classpath)</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      <strong>DSL이 Kotlin</strong>이라는 것이 큰 차이. <code>build.gradle.kts</code> 파일은 실제로 실행되는 Kotlin 스크립트이며, 복잡한 로직을 자유롭게 넣을 수 있습니다.
+      Groovy DSL(<code>build.gradle</code>, 확장자 <code>.kts</code> 아님)도 있지만 신규 프로젝트는 대부분 Kotlin DSL.
+    </p>
+
+    <h2 id="wrapper"><span class="section-num">2</span> Gradle Wrapper</h2>
+    <p>
+      <strong>프로젝트마다 Gradle 버전을 고정</strong>하는 메커니즘. <code>gradlew</code>(Unix), <code>gradlew.bat</code>(Windows) 스크립트가 저장소에 포함됩니다.
+    </p>
+
+<pre><code class="language-bash"># Python은 사용자가 Python 버전을 맞춰야 함
+python3.11 -m pip install ...
+
+# Gradle은 wrapper가 알아서 지정 버전을 다운로드
+./gradlew build
+# → gradle-wrapper.properties에 명시된 버전을 ~/.gradle에 다운로드 후 사용
+# → 팀원 모두 같은 Gradle 버전 보장</code></pre>
+
+    <p>프로젝트에 포함되는 wrapper 파일:</p>
+    <ul>
+      <li><code>gradlew</code>, <code>gradlew.bat</code>: 실행 스크립트</li>
+      <li><code>gradle/wrapper/gradle-wrapper.jar</code>: wrapper 코어 (작음, 버전 체크 + 다운로드)</li>
+      <li><code>gradle/wrapper/gradle-wrapper.properties</code>: 어떤 Gradle 버전 사용할지</li>
+    </ul>
+
+    <div class="box box-tip">
+      <div class="box-title">Python 개발자를 위한 관용</div>
+      <p>
+        Python 프로젝트에서 "시스템 Python vs venv"의 고민이 있는 것처럼, Java 프로젝트에선 "시스템 Gradle vs wrapper"를 결정해야 합니다.
+        <strong>답은 항상 wrapper</strong>. <code>./gradlew</code>만 쓰고 절대 <code>gradle</code>(시스템)을 쓰지 않습니다.
+      </p>
+    </div>
+
+    <h2 id="structure"><span class="section-num">3</span> build.gradle.kts 해부</h2>
+    <p>가장 기본적인 Spring Boot 프로젝트의 <code>build.gradle.kts</code>:</p>
+
+<pre><code class="language-kotlin">plugins {
+    kotlin("jvm") version "2.1.20"
+    kotlin("plugin.spring") version "2.1.20"
+    id("org.springframework.boot") version "3.5.3"
+    id("io.spring.dependency-management") version "1.1.7"
+    id("jacoco")
+}
+
+group = "com.parkj3onghoon"
+version = "0.0.1-SNAPSHOT"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("io.mockk:mockk:1.13.16")
+}
+
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.addAll("-Xjsr305=strict")
+    }
+}
+
+tasks.withType&lt;Test&gt; {
+    useJUnitPlatform()
+}</code></pre>
+
+    <h3>블록별 역할</h3>
+    <ul>
+      <li><code>plugins { }</code>: 사용할 빌드 기능(Kotlin 컴파일, Spring Boot 패키징 등)</li>
+      <li><code>group/version</code>: 이 프로젝트가 라이브러리로 배포될 때의 Maven 좌표</li>
+      <li><code>java { toolchain }</code>: JDK 버전 지정 — Gradle이 맞는 JDK 자동 다운로드/선택</li>
+      <li><code>repositories { }</code>: 의존성을 어디서 가져올지 (Maven Central이 기본)</li>
+      <li><code>dependencies { }</code>: 실제 라이브러리 목록 + 범위(scope)</li>
+      <li><code>tasks.withType&lt;T&gt; { }</code>: 특정 타입 태스크의 설정</li>
+    </ul>
+
+    <h2 id="deps"><span class="section-num">4</span> 의존성 선언과 Scope</h2>
+    <p>
+      <strong>모든 의존성은 scope를 가집니다</strong>. Python <code>requirements.txt</code>는 단일 레벨이지만, Gradle은 컴파일/런타임/테스트를 구분.
+    </p>
+
+    <table class="scope-table">
+      <thead>
+        <tr><th>Scope</th><th>의미</th><th>예시</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>implementation</code></td>
+          <td>컴파일 + 런타임 (기본 선택). 전이 의존은 내 사용자에게 <strong>숨김</strong></td>
+          <td>대부분의 라이브러리</td>
+        </tr>
+        <tr>
+          <td><code>api</code></td>
+          <td>컴파일 + 런타임. 전이 의존이 <strong>공개</strong>됨 (라이브러리 모듈에서 주로)</td>
+          <td>공통 인터페이스를 모듈 간 공유할 때</td>
+        </tr>
+        <tr>
+          <td><code>runtimeOnly</code></td>
+          <td>런타임에만 필요 (컴파일시 불필요)</td>
+          <td>DB 드라이버, logback-classic</td>
+        </tr>
+        <tr>
+          <td><code>compileOnly</code></td>
+          <td>컴파일에만 (런타임은 대상 환경이 제공)</td>
+          <td>Servlet API, Lombok(옛날)</td>
+        </tr>
+        <tr>
+          <td><code>testImplementation</code></td>
+          <td>테스트 컴파일 + 런타임</td>
+          <td>JUnit, MockK, Testcontainers</td>
+        </tr>
+        <tr>
+          <td><code>testRuntimeOnly</code></td>
+          <td>테스트 런타임만</td>
+          <td>junit-platform-launcher</td>
+        </tr>
+        <tr>
+          <td><code>annotationProcessor</code></td>
+          <td>어노테이션 처리기 (Lombok, MapStruct 등 Java용)</td>
+          <td>대부분 kapt/ksp로 대체</td>
+        </tr>
+        <tr>
+          <td><code>kapt</code> / <code>ksp</code></td>
+          <td>Kotlin 어노테이션 처리기</td>
+          <td>Hibernate, Dagger 등</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="box box-tip">
+      <div class="box-title">실무 관용</div>
+      <ul>
+        <li><strong>90%는 <code>implementation</code></strong>. 나머지는 명시적 이유가 있을 때</li>
+        <li>DB 드라이버는 <code>runtimeOnly</code> (코드에서 직접 import하지 않음, JDBC URL로 로딩)</li>
+        <li>공통 모듈에서 타입을 노출하고 싶으면 <code>api</code></li>
+        <li>Lombok은 Kotlin에선 안 씀 (data class가 대체)</li>
+      </ul>
+    </div>
+
+    <h3>의존성 좌표 문법</h3>
+<pre><code class="language-kotlin">// "group:name:version"
+implementation("org.springframework.boot:spring-boot-starter-web:3.5.3")
+
+// Spring Boot는 dependency-management plugin이 버전을 관리하므로
+// 버전 생략 가능
+implementation("org.springframework.boot:spring-boot-starter-web")
+
+// 특정 전이 의존 제외
+implementation("com.example:foo:1.0") {
+    exclude(group = "org.slf4j", module = "slf4j-log4j12")
+}
+
+// 테스트 클래스가 있는 모듈 전용
+implementation(project(":common"))
+testImplementation(testFixtures(project(":common")))</code></pre>
+
+    <h2 id="repos"><span class="section-num">5</span> Repository (Maven Central vs PyPI)</h2>
+    <p>
+      Java 생태계 중심 저장소는 <strong>Maven Central</strong>. PyPI처럼 공개 저장소 하나로 대부분 충족됩니다.
+      기업에선 <strong>사내 Nexus/Artifactory</strong>를 두어 프록시 + 내부 라이브러리 배포용으로 사용.
+    </p>
+
+<pre><code class="language-kotlin">repositories {
+    mavenCentral()        // 공식 중앙 저장소
+
+    // 추가 저장소
+    gradlePluginPortal()                 // Gradle plugin
+    maven("https://jitpack.io")          // GitHub 릴리즈 패키징
+    maven("https://repo.example.com") {  // 사내
+        credentials {
+            username = System.getenv("NEXUS_USER")
+            password = System.getenv("NEXUS_PASS")
+        }
+    }
+}</code></pre>
+
+    <h2 id="tasks"><span class="section-num">6</span> Task와 라이프사이클</h2>
+    <p>
+      Gradle의 모든 작업은 <strong>Task</strong>. <code>build</code>, <code>test</code>, <code>bootRun</code>이 전부 Task입니다.
+      의존 관계가 있어서 <code>./gradlew build</code>가 <code>compileKotlin → compileTestKotlin → test → jar</code>를 순차 실행.
+    </p>
+
+    <div class="lifecycle">
+      <div class="lc-box">clean</div>
+      <div class="lc-arrow">→</div>
+      <div class="lc-box">compileKotlin</div>
+      <div class="lc-arrow">→</div>
+      <div class="lc-box">processResources</div>
+      <div class="lc-arrow">→</div>
+      <div class="lc-box">compileTestKotlin</div>
+      <div class="lc-arrow">→</div>
+      <div class="lc-box late">test</div>
+      <div class="lc-arrow">→</div>
+      <div class="lc-box late">jar</div>
+      <div class="lc-arrow">→</div>
+      <div class="lc-box late">bootJar</div>
+    </div>
+
+    <h3>자주 쓰는 태스크</h3>
+<pre><code class="language-bash">./gradlew build              # 컴파일 + 테스트 + 패키징
+./gradlew test               # 테스트만
+./gradlew test --tests "UserServiceTest"  # 특정 테스트
+./gradlew bootRun            # Spring Boot 앱 실행
+./gradlew bootJar            # 실행 가능 JAR 생성 (build/libs/*.jar)
+./gradlew clean              # build 디렉토리 삭제
+./gradlew dependencies       # 의존성 트리 출력
+./gradlew tasks              # 사용 가능 태스크 목록
+./gradlew jacocoTestReport   # 커버리지 리포트 (jacoco plugin 필요)
+
+./gradlew build --no-daemon --rerun-tasks  # 캐시/데몬 무시 (디버깅)
+./gradlew build -x test      # test만 건너뛰기</code></pre>
+
+    <h3>커스텀 Task 만들기</h3>
+<pre><code class="language-kotlin">// 간단한 Task
+tasks.register("hello") {
+    group = "custom"
+    description = "인사말 출력"
+    doLast {
+        println("Hello from Gradle!")
+    }
+}
+
+// 기존 Task 수정
+tasks.named&lt;Test&gt;("test") {
+    useJUnitPlatform()
+    maxParallelForks = 4
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
+}
+
+// 파일 복사 Task
+tasks.register&lt;Copy&gt;("copyConfig") {
+    from("src/main/resources/config")
+    into("$buildDir/config")
+}</code></pre>
+
+    <h2 id="plugins"><span class="section-num">7</span> Plugin</h2>
+    <p>Gradle의 기능 확장 단위. <strong>프로젝트 용도에 따라 조합</strong>.</p>
+
+<pre><code class="language-kotlin">plugins {
+    // Kotlin 컴파일
+    kotlin("jvm") version "2.1.20"
+
+    // Spring 어노테이션 처리 (open 자동화)
+    kotlin("plugin.spring") version "2.1.20"
+
+    // JPA Entity의 no-arg 생성자 자동 생성
+    kotlin("plugin.jpa") version "2.1.20"
+
+    // Spring Boot fat JAR + bootRun
+    id("org.springframework.boot") version "3.5.3"
+
+    // Spring Boot 버전과 호환되는 의존성 버전 자동 관리
+    id("io.spring.dependency-management") version "1.1.7"
+
+    // 커버리지
+    id("jacoco")
+
+    // 정적 분석
+    id("io.gitlab.arturbosch.detekt") version "1.23.7"
+
+    // 포매팅
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+}</code></pre>
+
+    <h2 id="multi"><span class="section-num">8</span> Multi-module 프로젝트</h2>
+    <p>
+      큰 프로젝트는 모듈 단위로 분리합니다. Python의 "모노레포"와 유사하지만 Gradle은 모듈 간 의존 관계를 명시적으로 선언.
+    </p>
+
+<pre><code class="language-kotlin">// 루트: settings.gradle.kts
+rootProject.name = "tnear-backend"
+include(
+    ":common",
+    ":user-service",
+    ":ads-service",
+    ":admin-api"
+)
+
+// 루트: build.gradle.kts
+subprojects {
+    apply(plugin = "org.jetbrains.kotlin.jvm")
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("org.jetbrains.kotlin:kotlin-stdlib")
+    }
+}
+
+// user-service/build.gradle.kts
+dependencies {
+    implementation(project(":common"))  // 다른 모듈 참조
+    implementation("org.springframework.boot:spring-boot-starter-web")
+}</code></pre>
+
+    <div class="box box-info">
+      <div class="box-title">언제 multi-module이 필요한가</div>
+      <ul>
+        <li><strong>도메인 간 경계 강제</strong>: user → ads 방향만 허용, 반대는 컴파일 에러</li>
+        <li><strong>빌드 시간 단축</strong>: 변경된 모듈만 재빌드 (incremental)</li>
+        <li><strong>배포 단위 분리</strong>: 서비스별 별도 JAR 생성</li>
+        <li><strong>공통 코드 공유</strong>: common 모듈에 유틸/DTO</li>
+      </ul>
+    </div>
+
+    <h2 id="version-catalog"><span class="section-num">9</span> Version Catalog</h2>
+    <p>
+      최근 실무에선 <code>gradle/libs.versions.toml</code>로 의존성 버전을 중앙 관리합니다. multi-module에서 특히 유용.
+    </p>
+
+<pre><code class="language-toml"># gradle/libs.versions.toml
+[versions]
+kotlin = "2.1.20"
+spring-boot = "3.5.3"
+coroutines = "1.10.2"
+
+[libraries]
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web", version.ref = "spring-boot" }
+coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+mockk = { module = "io.mockk:mockk", version = "1.13.16" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }</code></pre>
+
+<pre><code class="language-kotlin">// build.gradle.kts
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.spring.boot)
+}
+
+dependencies {
+    implementation(libs.spring.boot.starter.web)
+    implementation(libs.coroutines.core)
+    testImplementation(libs.mockk)
+}</code></pre>
+
+    <h2 id="project"><span class="section-num">10</span> gate-futures-bot build.gradle.kts 분석</h2>
+    <span class="file-ref">build.gradle.kts</span>
+
+<pre><code class="language-kotlin">plugins {
+    kotlin("jvm") version "2.1.20"              // Kotlin JVM 컴파일
+    kotlin("plugin.spring") version "2.1.20"    // @Component 등의 class를 자동 open
+    id("org.springframework.boot") version "3.5.3"
+    id("io.spring.dependency-management") version "1.1.7"
+    id("jacoco")                                 // 커버리지
+}
+
+group = "com.parkj3onghoon"
+version = "0.0.1-SNAPSHOT"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)   // JDK 21 필수
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot
+    implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.boot:spring-boot-starter-validation")   // @Validated
+    implementation("org.springframework.boot:spring-boot-configuration-processor")  // @ConfigurationProperties IDE 힌트
+
+    // Kotlin
+    implementation("org.jetbrains.kotlin:kotlin-reflect")  // Spring이 필요
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+
+    // Gate.io SDK
+    implementation("io.gate:gate-api:7.1.8")
+
+    // Test
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("io.mockk:mockk:1.13.16")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+kotlin {
+    compilerOptions {
+        // Java의 JSR-305 어노테이션(@Nullable 등)을 엄격히 검사
+        freeCompilerArgs.addAll("-Xjsr305=strict")
+    }
+}
+
+tasks.withType&lt;Test&gt; {
+    useJUnitPlatform()   // JUnit 5 엔진 사용
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}</code></pre>
+
+    <div class="box-project">
+      <div class="box-title">포인트: kotlin("plugin.spring")</div>
+      <p>
+        Kotlin 클래스는 기본 <code>final</code>(상속 불가)인데, Spring은 <code>@Component</code> 등을 프록시로 감싸기 위해 상속이 필요합니다.
+        이 플러그인이 <strong>Spring 어노테이션이 붙은 클래스를 자동으로 <code>open</code></strong>으로 만듭니다.
+        없으면 런타임에 "클래스가 final이라 프록시 불가" 에러.
+      </p>
+    </div>
+
+    <div class="box-project">
+      <div class="box-title">포인트: spring-boot-starter-validation</div>
+      <p>
+        <code>@Validated</code>, <code>@NotBlank</code> 등 jakarta validation을 쓰려면 이 starter 필요.
+        <code>ApiProperties</code>, <code>BotProperties</code>의 값 검증에 사용됩니다 (A+ 리팩터링에서 추가).
+      </p>
+    </div>
+
+    <h3>실행 명령어</h3>
+<pre><code class="language-bash">./gradlew build               # 컴파일 + 테스트 + JAR
+./gradlew test                # 테스트만
+./gradlew jacocoTestReport    # 커버리지: build/reports/jacoco/test/html/index.html
+./gradlew bootRun             # 봇 시작 (기본 프로파일)
+./gradlew bootRun --args='--spring.profiles.active=dev'  # dev 프로파일
+
+# bootJar 생성 후 java로 실행 (production 배포와 동일)
+./gradlew bootJar
+java -jar build/libs/gate-futures-bot-0.0.1-SNAPSHOT.jar</code></pre>
+
+    <h2 id="interview"><span class="section-num">11</span> 예상 면접 질문</h2>
+
+    <div class="qa">
+      <div class="q">Q. <code>implementation</code>과 <code>api</code>의 차이는?</div>
+      <div class="a">
+        A. <strong>전이 의존(transitive dependency)의 공개 범위</strong>가 다릅니다.
+        <code>implementation</code>으로 선언한 의존성은 <strong>해당 모듈 안에서만</strong> 보이고, 이 모듈을 의존하는 다른 모듈에는 숨겨집니다.
+        <code>api</code>는 <strong>consuming 모듈에도 공개</strong>되어 그쪽에서도 import 가능.
+        <br>실무 기준: 기본은 <code>implementation</code>, 공통 타입을 모듈 경계 밖에서도 써야 하면(예: DTO를 포함한 common 모듈) <code>api</code>. 과도한 <code>api</code>는 의존 그래프가 복잡해지고 재컴파일 범위가 커져 권장되지 않습니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Gradle Wrapper는 왜 써야 하나요?</div>
+      <div class="a">
+        A. <strong>Gradle 버전을 저장소에 고정</strong>하기 위해. 시스템에 설치된 Gradle은 개발자마다 버전이 달라 "내 로컬에선 빌드되는데 동료 로컬에선 안 됨" 문제가 생깁니다. Wrapper 스크립트(<code>gradlew</code>)는 <code>gradle-wrapper.properties</code>에 명시된 버전을 자동 다운로드/실행하므로 모두 같은 버전을 사용. CI에서도 동일하게 동작.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. <code>bootJar</code>와 일반 <code>jar</code>의 차이는?</div>
+      <div class="a">
+        A. 일반 <code>jar</code>는 내 클래스만 담긴 아카이브로 의존 라이브러리를 별도로 classpath에 추가해야 실행됩니다. <code>bootJar</code>는 Spring Boot의 <strong>fat/uber JAR</strong>로, 의존 라이브러리를 모두 포함하고 <strong>내장 Tomcat</strong>까지 담아 <code>java -jar</code> 한 줄로 실행됩니다. 내부적으로는 <code>BOOT-INF/lib/</code> 아래에 의존 JAR들을 중첩 배치하고 커스텀 <code>MANIFEST.MF</code>의 <code>Main-Class</code>가 Spring의 <code>JarLauncher</code>를 가리킵니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Gradle과 Maven 중 어느 것을 선호하나요?</div>
+      <div class="a">
+        A. <strong>신규 프로젝트는 Gradle (특히 Kotlin DSL)</strong>이 대세입니다. 이유:
+        ① Kotlin DSL로 복잡한 로직 표현(커스텀 task, conditional dependency 등)이 자연스럽고,
+        ② incremental build + build cache로 Maven보다 빠르며,
+        ③ multi-module 구성이 더 유연합니다.
+        단, Maven은 XML이 선언적이라 <strong>툴 생태계 지원</strong>(GitHub Dependabot, 취약점 스캐너 등)이 더 잘되고 배우기 쉽습니다.
+        기존 Maven 프로젝트를 유지하는 회사도 많고, 둘 다 읽을 수 있어야 합니다.
+      </div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Q. Gradle 빌드 속도가 느릴 때 개선 방법은?</div>
+      <div class="a">
+        A.
+        ①<strong>Gradle daemon</strong> 활성(기본). 두 번째 실행부터 빨라짐.
+        ②<strong>Build cache</strong>: <code>org.gradle.caching=true</code> — 동일 입력이면 출력 재사용.
+        ③<strong>Parallel 실행</strong>: <code>org.gradle.parallel=true</code> — multi-module 병렬 빌드.
+        ④<strong>Configuration cache</strong> (Gradle 6.6+): 구성 단계 캐싱.
+        ⑤<strong>테스트 분할</strong>: <code>maxParallelForks</code>로 테스트 병렬.
+        ⑥<strong>불필요한 의존성 정리</strong>: <code>./gradlew dependencies</code>로 트리 점검.
+        CI에선 <code>--parallel --build-cache</code> 기본 조합, 그리고 remote build cache (Gradle Enterprise 등)로 팀 단위 캐시 공유.
+      </div>
+    </div>
+
+    <div class="box box-summary">
+      <div class="box-title">핵심 요약</div>
+      <ul>
+        <li>Gradle = <strong>빌드 + 의존성 + 태스크 러너</strong> (Python의 pip+setup+make 합침)</li>
+        <li>항상 <strong>Gradle Wrapper</strong>(<code>./gradlew</code>) 사용</li>
+        <li>의존성 scope: <strong>implementation</strong>이 기본, 필요시 api/runtimeOnly/compileOnly</li>
+        <li>Spring Boot 프로젝트는 <code>kotlin("plugin.spring")</code> 필수 (final 자동 open)</li>
+        <li>Multi-module로 경계 강제 + 빌드 시간 단축</li>
+        <li>Version Catalog로 의존성 중앙 관리 (libs.versions.toml)</li>
+      </ul>
+    </div>
+
+    <nav class="guide-nav">
+      <a href="06-kotlin-coroutines.html">&larr; 이전: 코루틴</a>
+      <a href="08-spring-boot-overview.html">다음: Spring Boot 개요 &rarr;</a>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+</body>
+</html>

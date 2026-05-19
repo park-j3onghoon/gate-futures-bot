@@ -53,6 +53,16 @@ Gate.io 선물 자동매매 Kotlin + Spring Boot 봇.
 5. /review로 코드 리뷰
 6. 커밋 (한글 메시지)
 
+# 정책 결정 시 ADR 작성
+
+코드 구현이 아닌 **아키텍처/정책 결정**이 내려질 때마다 `docs/adr/`에 ADR을 추가한다.
+
+- 대상: 라이브러리/프레임워크 선택, 모듈 경계, 의존성 방향, 저장소·스키마, 보안 모델, 명시적 트레이드오프가 있는 패턴 채택
+- 대상 아님: 단순 구현 디테일, 버그 픽스, 리팩터링, 일회성 선택
+- 양식: `docs/adr/template.md` 복사 → 다음 번호로 새 파일 생성 → `docs/adr/README.md` 인덱스에 추가
+- 한 번 Accepted된 ADR은 **수정하지 않는다**. 결정이 뒤집히면 새 ADR로 `Superseded` 처리
+- 자세한 가이드: `docs/adr/README.md`
+
 # 빌드/검증 명령어
 
 - 빌드: `./gradlew build`

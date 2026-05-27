@@ -84,3 +84,29 @@ def test_get_candles_wraps_sdk_exception():
     # when / then
     with pytest.raises(MarketDataError):
         exchange.get_candles("BTC_USDT", Interval.MIN_1)
+
+
+def test_volume_defaults_to_zero_when_missing():
+    """volume(v)이 None이면 0으로 둔다."""
+    # given
+    api = MagicMock()
+    api.list_futures_candlesticks.return_value = [_sdk_candle(v=None)]
+    exchange = GateExchange(api, settle="usdt")
+
+    # when
+    candles = exchange.get_candles("BTC_USDT", Interval.MIN_1)
+
+    # then
+    assert candles[0].volume == 0
+
+
+def test_raises_on_non_numeric_volume():
+    """volume(v)이 정수로 변환 불가하면 MarketDataError (SDK 경계 밖으로 ValueError 누출 방지)."""
+    # given
+    api = MagicMock()
+    api.list_futures_candlesticks.return_value = [_sdk_candle(v="abc")]
+    exchange = GateExchange(api, settle="usdt")
+
+    # when / then
+    with pytest.raises(MarketDataError):
+        exchange.get_candles("BTC_USDT", Interval.MIN_1)

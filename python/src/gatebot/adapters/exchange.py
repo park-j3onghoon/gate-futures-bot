@@ -55,11 +55,18 @@ class GateExchange(AbstractExchange):
     def _to_candle(c: FuturesCandlestick) -> Candle:
         if None in (c.t, c.o, c.h, c.l, c.c):
             raise MarketDataError(f"캔들 응답 필수 필드 누락: {c}")
+        # SDK는 t=float, v=str로 주는데 도메인은 정수. 변환 실패(빈 문자열·비정수)도
+        # SDK 경계를 넘지 않도록 도메인 예외로 감싼다.
+        try:
+            timestamp = int(c.t)
+            volume = int(c.v) if c.v is not None else 0
+        except (TypeError, ValueError) as e:
+            raise MarketDataError(f"캔들 수치 변환 실패: {c}") from e
         return Candle(
-            timestamp=int(c.t),
+            timestamp=timestamp,
             open=c.o,
             high=c.h,
             low=c.l,
             close=c.c,
-            volume=int(c.v) if c.v is not None else 0,
+            volume=volume,
         )

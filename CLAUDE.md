@@ -4,10 +4,11 @@
 
 # 프로젝트 개요
 
-Gate.io 선물 자동매매 Kotlin + Spring Boot 봇.
-- Kotlin 2.1.x, Spring Boot 3.5.x, Gradle Kotlin DSL
-- JDK 21+, gate-api SDK 7.1.8
+Gate.io 선물 자동매매 봇 학습 프로젝트. 같은 봇을 두 스택으로 구현하는 **모노레포**.
+- `kotlin/` — Kotlin 2.1.x + Spring Boot 3.5.x + Gradle Kotlin DSL, JDK 21+, gate-api SDK 7.1.8 (레퍼런스 구현)
+- `python/` — Python 3.12 + uv + 공식 gate-api SDK, Cosmic Python 구조 (진행 중)
 - 개인 학습 프로젝트, 로컬 실행
+- 모노레포 도입 배경: `docs/adr/0013-python-port-monorepo.md`
 
 # 일반 규칙
 
@@ -65,8 +66,14 @@ Gate.io 선물 자동매매 Kotlin + Spring Boot 봇.
 
 # 빌드/검증 명령어
 
-- 빌드: `./gradlew build`
+## Kotlin (`kotlin/`에서 실행)
+- 빌드: `cd kotlin && ./gradlew build`
 - 테스트: `./gradlew test`
 - 커버리지: `./gradlew jacocoTestReport`
 - 실행: `./gradlew bootRun`
 - 린트: Kotlin 컴파일러가 처리 (별도 린터 불필요)
+
+## Python (`python/`에서 실행)
+- 설치: `cd python && uv sync`
+- 테스트: `uv run pytest`
+- 실행(차트 조회): `uv run gatebot`

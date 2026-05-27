@@ -40,8 +40,8 @@ out/
 .kotlin
 
 ### 환경별 설정 (API Key 포함 가능) ###
-src/main/resources/application-dev.yml
-src/main/resources/application-prod.yml
+kotlin/src/main/resources/application-dev.yml
+kotlin/src/main/resources/application-prod.yml
 
 ### OS ###
 .DS_Store
@@ -51,3 +51,15 @@ docs/interview.zip
 
 # H2 이벤트 저장소 파일
 data/
+
+### Python (uv) ###
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+### 환경변수 (시크릿) ###
+.env

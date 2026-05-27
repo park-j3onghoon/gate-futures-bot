@@ -42,6 +42,7 @@ Architecture Decision Record — Michael Nygard가 제안한 가벼운 의사결
 
 ### 언어/플랫폼
 - [ADR-0001 — Kotlin + Spring Boot 채택](0001-kotlin-spring-boot.md)
+- [ADR-0013 — Python 포트 도입 및 모노레포 재구성](0013-python-port-monorepo.md)
 
 ### 도메인 경계
 - [ADR-0002 — Gate.io SDK 격리 (단일 진입점 GateClient)](0002-sdk-격리.md)

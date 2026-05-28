@@ -5,6 +5,7 @@ description = "Gate.io 선물 자동매매 봇 (Python 포트)"
 requires-python = ">=3.12"
 dependencies = [
     "gate-api>=7,<8",
+    "python-dotenv>=1.0",
 ]
 
 [project.scripts]

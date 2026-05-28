@@ -29,3 +29,24 @@ class Candle:
     @property
     def close_price(self) -> float:
         return float(self.close)
+
+
+@dataclass(frozen=True)
+class Position:
+    contract: str
+    size: int  # 양수=롱, 음수=숏. SDK는 str로 주지만 도메인은 정수.
+    entry_price: str  # 정밀도 보존
+    leverage: int
+    unrealised_pnl: str
+    realised_pnl: str
+
+
+@dataclass(frozen=True)
+class OrderResult:
+    id: int
+    contract: str
+    size: int
+    price: str
+    status: str
+    fill_price: str
+    create_time: float

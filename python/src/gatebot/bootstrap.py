@@ -1,10 +1,13 @@
 from gate_api import ApiClient, Configuration, FuturesApi
 
-from gatebot.adapters.exchange import AbstractExchange, GateExchange
+from gatebot.adapters.exchange import AbstractExchange, DryRunExchange, GateExchange
 from gatebot.config import Settings
 
 
-def build_exchange(settings: Settings | None = None) -> AbstractExchange:
+def build_exchange(
+    settings: Settings | None = None,
+    dry_run: bool = False,
+) -> AbstractExchange:
     settings = settings or Settings.from_env()
     config = Configuration(
         host=settings.host,
@@ -12,4 +15,5 @@ def build_exchange(settings: Settings | None = None) -> AbstractExchange:
         secret=settings.secret or None,
     )
     futures_api = FuturesApi(ApiClient(config))
-    return GateExchange(futures_api, settings.settle)
+    real = GateExchange(futures_api, settings.settle)
+    return DryRunExchange(real) if dry_run else real

@@ -1,11 +1,17 @@
 from unittest.mock import MagicMock
 
 import pytest
-from gate_api import FuturesCandlestick
+from gate_api import FuturesCandlestick, FuturesOrder
 from gate_api.exceptions import ApiException, GateApiException
 
 from gatebot.adapters.exchange import GateExchange
-from gatebot.domain.exceptions import MarketDataError
+from gatebot.domain.exceptions import (
+    AuthenticationError,
+    InsufficientBalanceError,
+    MarketDataError,
+    OrderError,
+    RateLimitError,
+)
 from gatebot.domain.model import Interval
 
 
@@ -70,8 +76,8 @@ def test_to_candle_raises_on_missing_field():
         exchange.get_candles("BTC_USDT", Interval.MIN_1)
 
 
-def test_get_candles_wraps_sdk_exception():
-    """SDK 예외를 도메인 MarketDataError로 감싼다."""
+def test_rate_limit_label_maps_to_rate_limit_error():
+    """RATE_LIMIT 라벨 SDK 예외 → RateLimitError (Kotlin mapGateException 동일)."""
     # given
     api = MagicMock()
     api.list_futures_candlesticks.side_effect = GateApiException(
@@ -82,7 +88,52 @@ def test_get_candles_wraps_sdk_exception():
     exchange = GateExchange(api, settle="usdt")
 
     # when / then
-    with pytest.raises(MarketDataError):
+    with pytest.raises(RateLimitError):
+        exchange.get_candles("BTC_USDT", Interval.MIN_1)
+
+
+def test_invalid_key_label_maps_to_authentication_error():
+    """INVALID_KEY 라벨 → AuthenticationError."""
+    # given
+    api = MagicMock()
+    api.list_futures_candlesticks.side_effect = GateApiException(
+        label="INVALID_KEY",
+        message="bad key",
+        exp=ApiException(status=401, reason="Unauthorized"),
+    )
+    exchange = GateExchange(api, settle="usdt")
+
+    # when / then
+    with pytest.raises(AuthenticationError):
+        exchange.get_candles("BTC_USDT", Interval.MIN_1)
+
+
+def test_balance_not_enough_label_maps_to_insufficient_balance():
+    """BALANCE_NOT_ENOUGH 라벨 → InsufficientBalanceError."""
+    # given
+    api = MagicMock()
+    api.create_futures_order.side_effect = GateApiException(
+        label="BALANCE_NOT_ENOUGH",
+        message="not enough",
+        exp=ApiException(status=400, reason="Bad Request"),
+    )
+    exchange = GateExchange(api, settle="usdt")
+
+    # when / then — leverage 호출은 통과 (mock 기본 동작)
+    with pytest.raises(InsufficientBalanceError):
+        exchange.create_order("BTC_USDT", size=1, leverage=3)
+
+
+def test_unknown_label_maps_to_order_error():
+    """알 수 없는 라벨 → OrderError (fallback)."""
+    api = MagicMock()
+    api.list_futures_candlesticks.side_effect = GateApiException(
+        label="WEIRD_LABEL",
+        message="something",
+        exp=ApiException(status=500, reason="Internal"),
+    )
+    exchange = GateExchange(api, settle="usdt")
+    with pytest.raises(OrderError):
         exchange.get_candles("BTC_USDT", Interval.MIN_1)
 
 
@@ -110,3 +161,122 @@ def test_raises_on_non_numeric_volume():
     # when / then
     with pytest.raises(MarketDataError):
         exchange.get_candles("BTC_USDT", Interval.MIN_1)
+
+
+# ---- get_position / create_order / close_position ----
+
+def _sdk_position(
+    size: str | None = "3",
+    leverage: str | None = "3",
+    contract: str = "BTC_USDT",
+    entry_price: str = "100",
+):
+    p = MagicMock()
+    p.size = size
+    p.leverage = leverage
+    p.contract = contract
+    p.entry_price = entry_price
+    p.unrealised_pnl = "0"
+    p.realised_pnl = "0"
+    return p
+
+
+def _sdk_order(
+    id_: int = 42,
+    contract: str = "BTC_USDT",
+    size: str = "1",
+    # SDK FuturesOrder 모델이 status를 "open"|"finished"만 허용 (client-side validation)
+    status: str = "finished",
+) -> FuturesOrder:
+    return FuturesOrder(
+        id=id_,
+        contract=contract,
+        size=size,
+        status=status,
+        fill_price="100",
+        create_time=1700000000.0,
+        price="0",
+    )
+
+
+def test_get_position_maps_sdk_to_domain():
+    """SDK Position을 도메인 Position으로 매핑 (size·leverage str→int)."""
+    # given
+    api = MagicMock()
+    api.get_position.return_value = _sdk_position(size="3", leverage="5")
+    exchange = GateExchange(api, settle="usdt")
+
+    # when
+    pos = exchange.get_position("BTC_USDT")
+
+    # then
+    assert pos is not None
+    assert pos.size == 3
+    assert pos.leverage == 5
+    assert pos.entry_price == "100"
+    api.get_position.assert_called_once_with("usdt", "BTC_USDT")
+
+
+def test_get_position_returns_none_when_size_zero():
+    """size=0이면 '포지션 없음'으로 보고 None 반환 (Kotlin 동일)."""
+    api = MagicMock()
+    api.get_position.return_value = _sdk_position(size="0", leverage="5")
+    exchange = GateExchange(api, settle="usdt")
+    assert exchange.get_position("BTC_USDT") is None
+
+
+def test_get_position_returns_none_when_size_missing():
+    """size=None도 None 반환."""
+    api = MagicMock()
+    api.get_position.return_value = _sdk_position(size=None, leverage="5")
+    exchange = GateExchange(api, settle="usdt")
+    assert exchange.get_position("BTC_USDT") is None
+
+
+def test_create_order_sets_leverage_then_sends_market_order():
+    """leverage 먼저 설정 후 시장가 주문 (Kotlin GateExchangeAdapter 패턴)."""
+    # given
+    api = MagicMock()
+    api.create_futures_order.return_value = _sdk_order(id_=42, size="3")
+    exchange = GateExchange(api, settle="usdt")
+
+    # when
+    result = exchange.create_order("BTC_USDT", size=3, leverage=3)
+
+    # then
+    api.update_position_leverage.assert_called_once_with(
+        "usdt", "BTC_USDT", "3", cross_leverage_limit="0"
+    )
+    api.create_futures_order.assert_called_once()
+    call_args = api.create_futures_order.call_args
+    assert call_args[0][0] == "usdt"
+    order = call_args[0][1]
+    assert order.contract == "BTC_USDT"
+    assert order.size == "3"  # SDK는 str로 받음
+    assert order.price == "0"  # market
+    assert order.tif == "ioc"
+    assert order.close is False
+    assert result.id == 42
+    assert result.size == 3
+
+
+def test_close_position_sends_close_flag():
+    """청산은 close=True FuturesOrder로."""
+    # given
+    api = MagicMock()
+    api.create_futures_order.return_value = _sdk_order(id_=43, size="0")
+
+    exchange = GateExchange(api, settle="usdt")
+
+    # when
+    result = exchange.close_position("BTC_USDT")
+
+    # then
+    api.create_futures_order.assert_called_once()
+    order = api.create_futures_order.call_args[0][1]
+    assert order.contract == "BTC_USDT"
+    assert order.close is True
+    assert order.price == "0"
+    assert order.tif == "ioc"
+    assert result.id == 43
+    assert result.status == "finished"

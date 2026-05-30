@@ -1,9 +1,11 @@
 import argparse
 import logging
+import sys
 from datetime import datetime, timezone
 
 from gatebot.adapters.exchange import AbstractExchange
 from gatebot.bootstrap import build_exchange
+from gatebot.domain.exceptions import AuthenticationError, GateError
 from gatebot.domain.model import Candle, Interval, Position
 from gatebot.service_layer import market_data, trading
 
@@ -26,7 +28,12 @@ def main(argv: list[str] | None = None) -> int:
         "buy": _cmd_buy,
         "close": _cmd_close,
     }
-    return handlers[args.cmd](exchange, args)
+    # 도메인 예외는 버그가 아니라 예상된 운영 상황(인증·잔고·레이트리밋 등).
+    # traceback 대신 사용자용 메시지 + 비정상 종료 코드로 보고한다.
+    try:
+        return handlers[args.cmd](exchange, args)
+    except GateError as e:
+        return _report_error(e)
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -116,3 +123,14 @@ def _print_position(pos: Position) -> None:
     print(f"  leverage: {pos.leverage}x")
     print(f"  unrealised_pnl: {pos.unrealised_pnl}")
     print(f"  realised_pnl: {pos.realised_pnl}")
+
+
+def _report_error(e: GateError) -> int:
+    print(f"❌ {type(e).__name__}: {e}", file=sys.stderr)
+    if isinstance(e, AuthenticationError):
+        print(
+            "   → testnet과 메인넷은 API 키 저장소가 분리돼 있습니다. 현재 host 환경에서 "
+            "발급한 키인지 확인하세요. (testnet 키는 'Futures TestNet APIKeys' 탭에서 발급)",
+            file=sys.stderr,
+        )
+    return 1

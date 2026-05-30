@@ -15,9 +15,6 @@ from gatebot.domain.exceptions import (
 from gatebot.domain.model import Candle, Interval, OrderResult, Position
 
 _MARKET_PRICE = "0"
-# Kotlin DEFAULT_CROSS_LEVERAGE_LIMIT — Gate.io update_position_leverage 호출 시 그대로 전달.
-# isolated 모드 leverage 설정 패턴 (Kotlin GateClient.updateLeverage 미러)
-_DEFAULT_CROSS_LEVERAGE_LIMIT = "0"
 
 
 class AbstractExchange(abc.ABC):
@@ -75,23 +72,29 @@ class GateExchange(AbstractExchange):
         return [self._to_candle(c) for c in raw]
 
     def get_position(self, contract: str) -> Position | None:
+        # Gate는 미보유 컨트랙트에 POSITION_NOT_FOUND(400)를 던진다(빈 size=0 Position이 아니라).
+        # Kotlin은 size=0만 처리 → 이 호스트(api-testnet.gateapi.io)에선 예외로 샌다. 둘 다 None.
         sdk_pos = self._call(
             lambda: self._futures_api.get_position(self._settle, contract),
             f"get_position(contract={contract})",
+            none_on_labels=("POSITION_NOT_FOUND",),
         )
+        if sdk_pos is None:
+            return None
         position = self._to_position(sdk_pos)
-        # size=0(또는 None→0)은 "포지션 없음"으로 본다 (Kotlin GateClient 동일)
         return position if position.size != 0 else None
 
     def create_order(self, contract: str, size: int, leverage: int) -> OrderResult:
         # Kotlin GateExchangeAdapter 패턴: leverage 먼저 설정 후 주문.
         # update_position_leverage 응답은 사용하지 않지만 실패 시 예외 전파.
+        # isolated 마진(leverage>0)에선 cross_leverage_limit을 비워야 한다 (Gate API 규칙).
+        # 함께 보내면 testnet이 "cross_leverage_limit only for cross-margin"으로 거부한다.
+        # Kotlin 레퍼런스(GateClient.updateLeverage)는 "0"을 넘기지만 — 동일 버그라 미러하지 않음.
         self._call(
             lambda: self._futures_api.update_position_leverage(
                 self._settle,
                 contract,
                 str(leverage),
-                cross_leverage_limit=_DEFAULT_CROSS_LEVERAGE_LIMIT,
             ),
             f"update_leverage(contract={contract}, leverage={leverage})",
         )
@@ -124,10 +127,13 @@ class GateExchange(AbstractExchange):
 
     # ---- helpers ----
 
-    def _call(self, action, context: str):
+    def _call(self, action, context: str, *, none_on_labels: tuple[str, ...] = ()):
         try:
             return action()
         except GateApiException as e:
+            # 일부 라벨은 에러가 아니라 "결과 없음" (get_position의 POSITION_NOT_FOUND)
+            if e.label in none_on_labels:
+                return None
             raise self._map_gate_exception(e, context) from e
         except ApiException as e:
             raise OrderError(f"[{context}] Gate.io API 호출 실패: {e}") from e

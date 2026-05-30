@@ -233,6 +233,37 @@ def test_get_position_returns_none_when_size_missing():
     assert exchange.get_position("BTC_USDT") is None
 
 
+def test_get_position_returns_none_on_position_not_found_label():
+    """POSITION_NOT_FOUND 라벨은 에러가 아니라 '포지션 없음' → None (예외로 새지 않는다)."""
+    # given
+    api = MagicMock()
+    api.get_position.side_effect = GateApiException(
+        label="POSITION_NOT_FOUND",
+        message="no position found",
+        exp=ApiException(status=400, reason="Bad Request"),
+    )
+    exchange = GateExchange(api, settle="usdt")
+
+    # when / then
+    assert exchange.get_position("BTC_USDT") is None
+
+
+def test_get_position_reraises_non_whitelisted_label():
+    """화이트리스트 밖 라벨은 흡수하지 않고 도메인 예외로 매핑한다 (none_on_labels 분기 검증)."""
+    # given
+    api = MagicMock()
+    api.get_position.side_effect = GateApiException(
+        label="INVALID_KEY",
+        message="invalid key",
+        exp=ApiException(status=400, reason="Bad Request"),
+    )
+    exchange = GateExchange(api, settle="usdt")
+
+    # when / then
+    with pytest.raises(AuthenticationError):
+        exchange.get_position("BTC_USDT")
+
+
 def test_create_order_sets_leverage_then_sends_market_order():
     """leverage 먼저 설정 후 시장가 주문 (Kotlin GateExchangeAdapter 패턴)."""
     # given
@@ -244,9 +275,7 @@ def test_create_order_sets_leverage_then_sends_market_order():
     result = exchange.create_order("BTC_USDT", size=3, leverage=3)
 
     # then
-    api.update_position_leverage.assert_called_once_with(
-        "usdt", "BTC_USDT", "3", cross_leverage_limit="0"
-    )
+    api.update_position_leverage.assert_called_once_with("usdt", "BTC_USDT", "3")
     api.create_futures_order.assert_called_once()
     call_args = api.create_futures_order.call_args
     assert call_args[0][0] == "usdt"

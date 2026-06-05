@@ -309,3 +309,103 @@ def test_close_position_sends_close_flag():
     assert order.tif == "ioc"
     assert result.id == 43
     assert result.status == "finished"
+
+
+def test_create_order_serializes_negative_size_for_short():
+    """숏 진입: 음수 size를 str로 그대로 전송 ('-2')."""
+    api = MagicMock()
+    api.create_futures_order.return_value = _sdk_order(id_=44, size="-2")
+    exchange = GateExchange(api, settle="usdt")
+
+    result = exchange.create_order("BTC_USDT", size=-2, leverage=3)
+
+    order = api.create_futures_order.call_args[0][1]
+    assert order.size == "-2"
+    assert result.size == -2
+
+
+# ---- get_last_price (ticker.last) ----
+
+def test_get_last_price_returns_ticker_last():
+    """단일 ticker의 last를 str로 반환."""
+    api = MagicMock()
+    api.list_futures_tickers.return_value = [MagicMock(last="70123.4")]
+    exchange = GateExchange(api, settle="usdt")
+
+    assert exchange.get_last_price("BTC_USDT") == "70123.4"
+    api.list_futures_tickers.assert_called_once_with("usdt", contract="BTC_USDT")
+
+
+@pytest.mark.parametrize("tickers", [[], [MagicMock(last=None)], [MagicMock(last="")], [MagicMock(last="0")]])
+def test_get_last_price_raises_on_unusable_last(tickers):
+    """빈 응답·last 없음·'0'은 MarketDataError (last=0으로 검증 무력화 방지)."""
+    api = MagicMock()
+    api.list_futures_tickers.return_value = tickers
+    exchange = GateExchange(api, settle="usdt")
+
+    with pytest.raises(MarketDataError):
+        exchange.get_last_price("BTC_USDT")
+
+
+# ---- create_trigger_order / cancel_trigger_order ----
+
+@pytest.mark.parametrize(
+    "is_long, is_take_profit, expected_rule, expected_order_type",
+    [
+        (True, True, 1, "close-long-position"),    # 롱 TP: 가격 상승 도달(≥)
+        (True, False, 2, "close-long-position"),   # 롱 SL: 가격 하락 도달(≤)
+        (False, True, 2, "close-short-position"),  # 숏 TP: 가격 하락 도달(≤)
+        (False, False, 1, "close-short-position"),  # 숏 SL: 가격 상승 도달(≥)
+    ],
+)
+def test_create_trigger_order_payload(is_long, is_take_profit, expected_rule, expected_order_type):
+    """롱/숏 × TP/SL 4조합의 rule·order_type·페이로드 정확 매칭."""
+    api = MagicMock()
+    api.create_price_triggered_order.return_value = MagicMock(id=12345)
+    exchange = GateExchange(api, settle="usdt")
+
+    trigger_id = exchange.create_trigger_order(
+        "BTC_USDT", 77777.0, is_long=is_long, is_take_profit=is_take_profit
+    )
+
+    assert trigger_id == 12345
+    settle, po = api.create_price_triggered_order.call_args[0]
+    assert settle == "usdt"
+    assert po.order_type == expected_order_type
+    assert po.trigger.rule == expected_rule
+    assert po.trigger.price == "77777"
+    assert po.trigger.price_type == 0
+    assert po.trigger.strategy_type == 0
+    assert po.initial.contract == "BTC_USDT"
+    assert po.initial.size == 0
+    assert po.initial.price == "0"
+    assert po.initial.tif == "ioc"
+
+
+def test_create_trigger_order_raises_when_response_id_missing():
+    """트리거 응답에 id가 없으면 OrderError."""
+    api = MagicMock()
+    api.create_price_triggered_order.return_value = MagicMock(id=None)
+    exchange = GateExchange(api, settle="usdt")
+
+    with pytest.raises(OrderError):
+        exchange.create_trigger_order("BTC_USDT", 77777.0, is_long=True, is_take_profit=True)
+
+
+def test_cancel_trigger_order_delegates_to_sdk():
+    """cancel은 settle + trigger_id로 SDK 호출에 위임."""
+    api = MagicMock()
+    exchange = GateExchange(api, settle="usdt")
+
+    exchange.cancel_trigger_order(999)
+
+    api.cancel_price_triggered_order.assert_called_once_with("usdt", 999)
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [(77777.0, "77777"), (1.5, "1.5"), (77777.0000, "77777"), (0.000012, "0.000012")],
+)
+def test_format_price_strips_scientific_and_trailing_zero(value, expected):
+    """정수는 꼬리0/과학표기 제거, 소수는 고정소수점 유지."""
+    assert GateExchange._format_price(value) == expected

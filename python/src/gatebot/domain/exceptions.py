@@ -24,3 +24,11 @@ class PositionError(GateError):
 
 class MarketDataError(GateError):
     """캔들/시세 데이터 오류 (빈 데이터·필수 필드 누락·수치 변환 실패)."""
+
+
+class ParseError(GateError):
+    """명령어 문자열 파싱 실패 — 형식 오류·필수 토큰 누락·미소비/다중매칭 토큰."""
+
+
+class CommandError(GateError):
+    """주문 명령 도메인 불변식 위반 (size/leverage 범위, tp/sl 순서)."""

@@ -1,6 +1,13 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from gatebot.domain.exceptions import CommandError
+
+
+class Side(str, Enum):
+    LONG = "long"
+    SHORT = "short"
+
 
 class Interval(str, Enum):
     SEC_10 = "10s"
@@ -50,3 +57,34 @@ class OrderResult:
     status: str
     fill_price: str
     create_time: float
+
+
+@dataclass(frozen=True)
+class OrderCommand:
+    contract: str
+    side: Side
+    size: int  # 양의 magnitude; 부호(숏=음수)는 service _signed_size가 부여
+    leverage: int
+    take_profit: float | None = None
+    stop_loss: float | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.size, int) or self.size <= 0:
+            raise CommandError(f"size는 양의 정수여야 합니다: {self.size}")
+        if not isinstance(self.leverage, int) or self.leverage <= 0:
+            raise CommandError(f"leverage는 양의 정수여야 합니다: {self.leverage}")
+        tp, sl = self.take_profit, self.stop_loss
+        # 둘 다 있을 때만 순수 순서 검사. 진입가 끼인 3자 비교(롱 tp>entry>sl)는 service 책임.
+        if tp is not None and sl is not None:
+            if self.side is Side.LONG and tp <= sl:
+                raise CommandError(f"롱은 tp({tp}) > sl({sl}) 여야 합니다")
+            if self.side is Side.SHORT and tp >= sl:
+                raise CommandError(f"숏은 tp({tp}) < sl({sl}) 여야 합니다")
+
+
+@dataclass(frozen=True)
+class PlacedOrder:
+    entry: OrderResult
+    filled: bool  # IOC 체결 여부 — 미체결(False)이면 트리거 미등록
+    sl_trigger_id: int | None
+    tp_trigger_id: int | None

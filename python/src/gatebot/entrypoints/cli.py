@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from gatebot.adapters.exchange import AbstractExchange
 from gatebot.bootstrap import build_exchange
 from gatebot.domain.exceptions import AuthenticationError, GateError
-from gatebot.domain.model import Candle, Interval, Position
+from gatebot.domain.model import Candle, Interval, PlacedOrder, Position
+from gatebot.entrypoints.command_parser import parse_order_command
 from gatebot.service_layer import market_data, trading
 
 _INTERVAL_CODES = [i.value for i in Interval]
@@ -26,6 +27,7 @@ def main(argv: list[str] | None = None) -> int:
         "fetch": _cmd_fetch,
         "pos": _cmd_pos,
         "buy": _cmd_buy,
+        "order": _cmd_order,
         "close": _cmd_close,
     }
     # 도메인 예외는 버그가 아니라 예상된 운영 상황(인증·잔고·레이트리밋 등).
@@ -56,7 +58,16 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p_buy = sub.add_parser("buy", help="롱 진입 — 실거래 (인증 필요)")
     p_buy.add_argument("contract", nargs="?", default="BTC_USDT")
     p_buy.add_argument("--size", type=int, required=True, help="계약 수 (양수, 안전 캡 5)")
-    p_buy.add_argument("--leverage", type=int, default=3, help="레버리지 (기본 3, 안전 캡 3)")
+    p_buy.add_argument("--leverage", type=int, default=3, help="레버리지 (기본 3, 안전 캡 10)")
+
+    p_order = sub.add_parser(
+        "order",
+        help='슬래시 명령 매매 (롱/숏 + TP/SL) — 인증 필요',
+    )
+    p_order.add_argument(
+        "raw",
+        help='주문 명령 문자열(따옴표로 감싸기) — 예: "BTC_USDT / 시장가 / 롱 / 9배 / tp:77777 / sl:66666 / size:2"',
+    )
 
     p_close = sub.add_parser("close", help="포지션 청산 (인증 필요)")
     p_close.add_argument("contract", nargs="?", default="BTC_USDT")
@@ -93,6 +104,21 @@ def _cmd_buy(exchange: AbstractExchange, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_order(exchange: AbstractExchange, args: argparse.Namespace) -> int:
+    command = parse_order_command(args.raw)
+    if not args.dry_run:
+        # 실주문 직전 파싱 결과 echo — 오타가 유효한 다른 심볼로 둔갑하는 사고를 사람이 잡게 한다.
+        tp = command.take_profit if command.take_profit is not None else "-"
+        sl = command.stop_loss if command.stop_loss is not None else "-"
+        print(
+            f"주문 확인 ▶ contract={command.contract} side={command.side.value} "
+            f"size={command.size} leverage={command.leverage} tp={tp} sl={sl}"
+        )
+    placed = trading.open_position(exchange, command)
+    _print_placed(placed)
+    return 0
+
+
 def _cmd_close(exchange: AbstractExchange, args: argparse.Namespace) -> int:
     result = trading.close(exchange, args.contract)
     print(f"청산 응답: id={result.id}, status={result.status}, fill_price={result.fill_price}")
@@ -113,6 +139,27 @@ def _print_candles(contract: str, interval: str, candles: list[Candle]) -> None:
     for c in candles:
         ts = datetime.fromtimestamp(c.timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         print(f"{ts:<20}{c.open:>12}{c.high:>12}{c.low:>12}{c.close:>12}{c.volume:>10}")
+
+
+def _print_placed(placed: PlacedOrder) -> None:
+    entry = placed.entry
+    print(f"진입 응답: id={entry.id}, status={entry.status}, fill_price={entry.fill_price}")
+    if not placed.filled:
+        # IOC 미체결 — 네이키드(체결됐는데 보호 없음)와 구분해 표기 (오인 방치 방지)
+        print("⚠️  IOC 미체결 — 진입 안 됨 (트리거 미등록)")
+        return
+    print(f"  SL 트리거: {_fmt_trigger(placed.sl_trigger_id)}")
+    print(f"  TP 트리거: {_fmt_trigger(placed.tp_trigger_id)}")
+    if placed.sl_trigger_id is None:
+        print("⚠️  네이키드(손절 없음) — 보호장치 없이 진입됨")
+
+
+def _fmt_trigger(trigger_id: int | None) -> str:
+    if trigger_id is None:
+        return "미설정"
+    if trigger_id < 0:
+        return "dry-run"
+    return str(trigger_id)
 
 
 def _print_position(pos: Position) -> None:

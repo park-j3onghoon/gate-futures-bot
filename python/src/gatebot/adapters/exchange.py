@@ -194,6 +194,9 @@ class GateExchange(AbstractExchange):
                 size=0,
                 price=_MARKET_PRICE,
                 tif="ioc",
+                # one-way 청산 트리거 필수 — close=False(기본)면 Gate가 order_type=close-*-position과
+                # 모순돼 "either isclose must be set or auto_size must be non-empty"로 거부(testnet 확인).
+                close=True,
             ),
             trigger=FuturesPriceTrigger(
                 strategy_type=_STRATEGY_PRICE,

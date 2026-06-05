@@ -380,6 +380,7 @@ def test_create_trigger_order_payload(is_long, is_take_profit, expected_rule, ex
     assert po.initial.size == 0
     assert po.initial.price == "0"
     assert po.initial.tif == "ioc"
+    assert po.initial.close is True  # one-way 청산 트리거 필수 (order_type=close-*-position과 정합)
 
 
 def test_create_trigger_order_raises_when_response_id_missing():
